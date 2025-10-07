@@ -4,6 +4,10 @@ import Layout from '../components/layout/Layout';
 
 // Import pages
 import Home from '../pages/Home';
+import Properties from '../pages/Properties';
+import Calculators from '../pages/Calculators';
+import About from '../pages/About';
+import SignIn from '../pages/Auth/SignIn';
 
 const router = createBrowserRouter([
   {
@@ -13,6 +17,27 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <Home />,
+      },
+      {
+        path: 'properties',
+        element: <Properties />,
+      },
+      {
+        path: 'calculators',
+        element: <Calculators />,
+      },
+      {
+        path: 'about',
+        element: <About />,
+      },
+      {
+        path: 'signin',
+        element: <SignIn />,
+      },
+      // Redirect signup to signin
+      {
+        path: 'signup',
+        element: <SignIn />,
       },
     ],
   },
