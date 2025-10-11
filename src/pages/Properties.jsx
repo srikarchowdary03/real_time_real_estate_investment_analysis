@@ -117,6 +117,15 @@ export default function Properties() {
                   size="lg"
                   layoutId="main-search"
                 />
+
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                  className="mt-3 text-center text-xs text-gray-400"
+                >
+                  Press <kbd className="rounded border bg-gray-50 px-1">Enter</kbd> to search
+                </motion.p>
               </motion.div>
             )}
           </AnimatePresence>
