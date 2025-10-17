@@ -35,7 +35,6 @@ const router = createBrowserRouter([
         path: 'signin',
         element: <SignIn />,
       },
-      // Redirect signup to signin
       {
         path: 'signup',
         element: <SignIn />,
@@ -49,4 +48,3 @@ const router = createBrowserRouter([
 ]);
 
 export default router;
-
