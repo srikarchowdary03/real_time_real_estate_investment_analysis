@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
+import APITest from '../pages/APITest';
 
 // Import pages
 import Home from '../pages/Home';
@@ -39,8 +40,13 @@ const router = createBrowserRouter([
         path: 'signup',
         element: <SignIn />,
       },
+      {
+        path: 'api-test',
+        element: <APITest />,
+      },
     ],
   },
 ]);
 
 export default router;
+
