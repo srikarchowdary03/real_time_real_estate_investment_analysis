@@ -1,7 +1,11 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Calculator, FileText, Home as HomeIcon, DollarSign } from 'lucide-react';
+import PropertySearchBar from '../components/common/PropertySearchBar';
 
 const Home = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section - Clean White with Red Accent */}
@@ -17,21 +21,37 @@ const Home = () => {
               Search, analyze, and compare real estate investments with powerful tools
             </p>
 
-            {/* Search Bar */}
+            {/* Functional Search Bar */}
             <div className="max-w-3xl mx-auto mb-8">
-              <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-2 flex flex-col sm:flex-row gap-2">
-                <div className="flex-1 flex items-center gap-3 px-4">
-                  <Search className="w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Enter an address, neighborhood, city, or ZIP code"
-                    className="flex-1 py-3 text-gray-900 placeholder-gray-400 focus:outline-none"
-                  />
-                </div>
-                <button className="bg-red-600 text-white px-8 py-3 rounded-md font-semibold hover:bg-red-700 transition-colors">
-                  Search
+              <PropertySearchBar 
+                size="large"
+                placeholder="Enter an address, neighborhood, city, or ZIP code"
+              />
+            </div>
+
+            {/* Quick Search Suggestions */}
+            <div className="flex justify-center gap-3 mb-8 flex-wrap">
+              <span className="text-sm text-gray-500">Popular:</span>
+              {[
+                { label: 'Boston, MA', zip: '02134' },
+                { label: 'Los Angeles', zip: '90004' },
+                { label: 'Miami Beach', zip: '33139' },
+                { label: 'Austin, TX', city: 'Austin', state: 'TX' }
+              ].map((location, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (location.zip) {
+                      navigate(`/properties?zip=${location.zip}`);
+                    } else if (location.city && location.state) {
+                      navigate(`/properties?city=${location.city}&state=${location.state}`);
+                    }
+                  }}
+                  className="text-sm text-red-600 hover:text-red-700 hover:underline transition-colors"
+                >
+                  {location.label}
                 </button>
-              </div>
+              ))}
             </div>
 
             {/* Stats */}
@@ -67,7 +87,7 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Step 1 */}
-            <div className="bg-white rounded-lg p-6 border border-gray-200">
+            <div className="bg-white rounded-lg p-6 border border-gray-200 hover:shadow-lg transition-shadow">
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
                 <Search className="w-6 h-6 text-red-600" />
               </div>
@@ -75,12 +95,12 @@ const Home = () => {
                 Search properties
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Browse thousands of properties with real-time data
+                Browse thousands of properties with real-time data from across the United States
               </p>
             </div>
 
             {/* Step 2 */}
-            <div className="bg-white rounded-lg p-6 border border-gray-200">
+            <div className="bg-white rounded-lg p-6 border border-gray-200 hover:shadow-lg transition-shadow">
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
                 <Calculator className="w-6 h-6 text-red-600" />
               </div>
@@ -88,12 +108,12 @@ const Home = () => {
                 Run the numbers
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Calculate ROI, cash flow, and key investment metrics
+                Calculate ROI, cash flow, mortgage payments, and key investment metrics instantly
               </p>
             </div>
 
             {/* Step 3 */}
-            <div className="bg-white rounded-lg p-6 border border-gray-200">
+            <div className="bg-white rounded-lg p-6 border border-gray-200 hover:shadow-lg transition-shadow">
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
                 <FileText className="w-6 h-6 text-red-600" />
               </div>
@@ -101,7 +121,7 @@ const Home = () => {
                 Get your report
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Download professional analysis reports to share
+                Download professional analysis reports with neighborhood data and comparables
               </p>
             </div>
           </div>
@@ -122,7 +142,7 @@ const Home = () => {
 
           <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {/* Rental Calculator */}
-            <div className="bg-white rounded-lg p-6 border-2 border-gray-200 relative">
+            <div className="bg-white rounded-lg p-6 border-2 border-gray-200 relative hover:border-gray-300 transition-colors">
               <div className="absolute top-4 right-4">
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded">
                   Coming soon
@@ -155,7 +175,7 @@ const Home = () => {
             </div>
 
             {/* Fix & Flip Calculator */}
-            <div className="bg-white rounded-lg p-6 border-2 border-gray-200 relative">
+            <div className="bg-white rounded-lg p-6 border-2 border-gray-200 relative hover:border-gray-300 transition-colors">
               <div className="absolute top-4 right-4">
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded">
                   Coming soon
@@ -187,6 +207,25 @@ const Home = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* CTA Section */}
+      <div className="py-16 bg-gray-50 border-t">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            Ready to find your next investment?
+          </h2>
+          <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+            Start searching for properties and analyzing investment opportunities today
+          </p>
+          <button
+            onClick={() => navigate('/properties')}
+            className="bg-red-600 text-white px-8 py-3 rounded-md font-semibold hover:bg-red-700 transition-colors inline-flex items-center gap-2"
+          >
+            <Search className="w-5 h-5" />
+            Browse Properties
+          </button>
         </div>
       </div>
     </div>
