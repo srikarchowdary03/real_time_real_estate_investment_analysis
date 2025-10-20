@@ -2,6 +2,9 @@ import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import APITest from '../pages/APITest';
+import MapTest from '../pages/MapTest';
+import TestButtons from '../pages/TestButtons';
+
 
 // Import pages
 import Home from '../pages/Home';
@@ -42,6 +45,14 @@ const router = createBrowserRouter([
       {
         path: 'api-test',
         element: <APITest />,
+      },
+      {
+        path: 'map-test', // Add this route for testing
+        element: <MapTest />,
+      },
+      {
+        path: 'test-buttons',
+        element: <TestButtons />,
       },
     ],
   },
