@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Home as HomeIcon, Bed, Bath, Square, Map, List, LayoutGrid } from 'lucide-react';
 import PropertySearchBar from "../components/common/PropertySearchBar";
 import PropertyMap from "../components/features/PropertyMap";
+import PropertyFilters from "../components/features/PropertyFilters"; // ADD THIS IMPORT
 import { searchPropertiesForSale } from "../services/realtyAPI";
 
 const Properties = () => {
@@ -13,10 +14,10 @@ const Properties = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentLocation, setCurrentLocation] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'split', 'map'
+  const [viewMode, setViewMode] = useState('list');
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [filters, setFilters] = useState({}); // ADD THIS STATE
 
-  // Fetch properties when page loads or search params change
   useEffect(() => {
     const zip = searchParams.get('zip');
     const city = searchParams.get('city');
@@ -26,9 +27,9 @@ const Properties = () => {
     if (zip || city || search) {
       fetchProperties(zip, city, state, search);
     }
-  }, [searchParams]);
+  }, [searchParams, filters]); // ADD filters TO DEPENDENCY ARRAY
 
-  // Fetch properties from API
+  // MODIFY fetchProperties to include filters
   const fetchProperties = async (zip, city, state, search) => {
     setLoading(true);
     setError(null);
@@ -36,18 +37,23 @@ const Properties = () => {
     try {
       let data;
       
+      // Merge filters with search parameters
+      const searchOptions = { 
+        limit: 50,
+        ...filters // Add filters to the API call
+      };
+
       if (zip) {
         setCurrentLocation(`ZIP ${zip}`);
-        data = await searchPropertiesForSale(zip, null, { limit: 50 });
+        data = await searchPropertiesForSale(zip, null, searchOptions);
       } else if (city && state) {
         setCurrentLocation(`${city}, ${state}`);
-        data = await searchPropertiesForSale(city, state, { limit: 50 });
+        data = await searchPropertiesForSale(city, state, searchOptions);
       } else if (search) {
         setCurrentLocation(search);
-        data = await searchPropertiesForSale(search, null, { limit: 50 });
+        data = await searchPropertiesForSale(search, null, searchOptions);
       }
 
-      // Extract properties from response
       const results = data?.data?.home_search?.results || 
                      data?.data?.results || 
                      data?.results || 
@@ -55,7 +61,6 @@ const Properties = () => {
 
       setProperties(results);
       
-      // Debug coordinates
       const withCoords = results.filter(p => 
         p.location?.address?.coordinate?.lat && 
         p.location?.address?.coordinate?.lon
@@ -63,7 +68,7 @@ const Properties = () => {
       console.log(`📍 ${withCoords.length} out of ${results.length} properties have coordinates`);
       
       if (results.length === 0) {
-        setError('No properties found for this location. Try a different search.');
+        setError('No properties found matching your criteria. Try adjusting your filters.');
       }
     } catch (err) {
       console.error('Error fetching properties:', err);
@@ -73,7 +78,11 @@ const Properties = () => {
     }
   };
 
-  // Handle new search from search bar
+  // ADD THIS HANDLER
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
   const handleNewSearch = (location) => {
     if (location.postal_code) {
       navigate(`/properties?zip=${location.postal_code}`);
@@ -82,7 +91,6 @@ const Properties = () => {
     }
   };
 
-  // Handle property click from map
   const handlePropertyClick = (property) => {
     setSelectedProperty(property);
     const element = document.getElementById(`property-${property.property_id}`);
@@ -206,7 +214,6 @@ const Properties = () => {
       <div className="sticky top-0 bg-white border-b border-gray-200 z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            {/* Logo/Home Link */}
             <button
               onClick={() => navigate('/')}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -215,7 +222,6 @@ const Properties = () => {
               <HomeIcon className="w-6 h-6 text-red-600" />
             </button>
 
-            {/* Search Bar */}
             <div className="flex-1 max-w-3xl">
               <PropertySearchBar 
                 size="medium" 
@@ -223,6 +229,12 @@ const Properties = () => {
                 onSearch={handleNewSearch}
               />
             </div>
+
+            {/* ADD FILTER BUTTON HERE */}
+            <PropertyFilters 
+              onFilterChange={handleFilterChange}
+              initialFilters={filters}
+            />
           </div>
         </div>
       </div>
@@ -237,6 +249,12 @@ const Properties = () => {
             </h1>
             <p className="text-gray-600">
               {properties.length} {properties.length === 1 ? 'property' : 'properties'} found
+              {/* ADD ACTIVE FILTER DISPLAY */}
+              {Object.keys(filters).length > 0 && (
+                <span className="ml-2 text-red-600 font-semibold">
+                  (with {Object.keys(filters).length} filter{Object.keys(filters).length !== 1 ? 's' : ''})
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -256,10 +274,9 @@ const Properties = () => {
           </div>
         )}
 
-        {/* Properties Content - List/Split/Map Views */}
+        {/* Properties Content */}
         {!loading && !error && properties.length > 0 && (
           <div className={`flex gap-6 ${viewMode === 'split' ? 'h-[calc(100vh-300px)]' : ''}`}>
-            {/* Property List/Grid */}
             {(viewMode === 'list' || viewMode === 'split') && (
               <div className={`${viewMode === 'split' ? 'w-1/2 overflow-y-auto pr-3' : 'w-full'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -274,7 +291,6 @@ const Properties = () => {
               </div>
             )}
 
-            {/* Map View */}
             {(viewMode === 'map' || viewMode === 'split') && (
               <div className={`${viewMode === 'split' ? 'w-1/2 sticky top-[120px]' : 'w-full'} ${viewMode === 'map' ? 'h-[calc(100vh-250px)]' : 'h-full'}`}>
                 <PropertyMap
@@ -300,7 +316,7 @@ const Properties = () => {
   );
 };
 
-// Property Card Component
+// PropertyCard Component (unchanged)
 const PropertyCard = ({ property, isSelected }) => {
   const navigate = useNavigate();
   
