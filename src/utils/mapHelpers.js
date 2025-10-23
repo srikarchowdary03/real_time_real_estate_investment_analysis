@@ -62,7 +62,7 @@ export const formatPrice = (price) => {
   return `$${price.toLocaleString()}`;
 };
 
-// Get bounds for all properties
+// Get bounds for all properties with padding
 export const getMapBounds = (properties) => {
   if (!properties || properties.length === 0) return null;
 
@@ -81,6 +81,15 @@ export const getMapBounds = (properties) => {
   ];
 };
 
+// Get padding options for fitBounds to avoid controls
+export const getFitBoundsOptions = () => {
+  return {
+    paddingTopLeft: [10, 80],     // More space for zoom controls at top
+    paddingBottomRight: [10, 80], // More space for other controls at bottom
+    maxZoom: 15,                   // Don't zoom in too much
+  };
+};
+
 // Get default map center based on search location or properties
 export const getMapCenter = (properties, defaultCenter = [42.3601, -71.0589]) => {
   if (!properties || properties.length === 0) return defaultCenter;
@@ -97,7 +106,7 @@ export const getMapCenter = (properties, defaultCenter = [42.3601, -71.0589]) =>
   ];
 };
 
-// Custom cluster icon
+// Custom cluster icon - moved to bottom right to avoid controls
 export const createClusterCustomIcon = (cluster) => {
   const count = cluster.getChildCount();
   let size = 'small';
@@ -139,4 +148,19 @@ export const createClusterCustomIcon = (cluster) => {
     className: 'custom-cluster-icon',
     iconSize: L.point(sizeMap[size], sizeMap[size], true),
   });
+};
+
+// Map options with controls positioned to avoid overlap
+export const getMapOptions = () => {
+  return {
+    zoomControl: false, // We'll add it manually in a better position
+    attributionControl: true,
+  };
+};
+
+// Get zoom control options - position on left side
+export const getZoomControlOptions = () => {
+  return {
+    position: 'topleft',
+  };
 };
