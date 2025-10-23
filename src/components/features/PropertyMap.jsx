@@ -1,29 +1,27 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
-import { useNavigate } from 'react-router-dom';
-import { Bed, Bath, Square, MapPin } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
 import {
   createCustomIcon,
-  getMapCenter,
+  formatPrice,
   getMapBounds,
+  getMapCenter,
   createClusterCustomIcon,
+  getFitBoundsOptions,
 } from '../../utils/mapHelpers';
-import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-// Component to update map view when properties change
-const MapUpdater = ({ properties }) => {
+// Component to fit bounds when properties change
+const FitBounds = ({ properties }) => {
   const map = useMap();
 
   useEffect(() => {
     if (properties && properties.length > 0) {
       const bounds = getMapBounds(properties);
       if (bounds) {
-        try {
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-        } catch (error) {
-          console.warn('Could not fit bounds:', error);
-        }
+        const fitOptions = getFitBoundsOptions();
+        map.fitBounds(bounds, fitOptions);
       }
     }
   }, [properties, map]);
@@ -32,80 +30,44 @@ const MapUpdater = ({ properties }) => {
 };
 
 const PropertyMap = ({ properties, selectedProperty, onPropertyClick }) => {
-  const navigate = useNavigate();
-
-  // Get map center - memoized to prevent unnecessary recalculations
-  const center = useMemo(() => getMapCenter(properties), [properties]);
-
-  // Filter properties with valid coordinates - memoized
-  const validProperties = useMemo(() => {
-    return properties?.filter(
-      (p) => p.location?.address?.coordinate?.lat && p.location?.address?.coordinate?.lon
-    ) || [];
-  }, [properties]);
-
-  // Handle marker click
-  const handleMarkerClick = (property) => {
-    if (onPropertyClick) {
-      onPropertyClick(property);
-    }
-  };
-
-  // Handle view details click
-  const handleViewDetails = (propertyId, e) => {
-    e.stopPropagation();
-    navigate(`/property/${propertyId}`);
-  };
-
-  if (validProperties.length === 0) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
-        <div className="text-center p-8">
-          <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-600 text-lg font-medium">No properties to display on map</p>
-          <p className="text-gray-500 text-sm mt-2">
-            Properties without valid coordinates cannot be shown
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const mapRef = useRef(null);
+  const center = getMapCenter(properties);
 
   return (
-    <div className="w-full h-full rounded-lg overflow-hidden shadow-lg relative">
+    <div className="w-full h-full relative">
       <MapContainer
         center={center}
-        zoom={13}
-        style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={true}
-        whenReady={(map) => {
-          // Invalidate size when map is ready
-          setTimeout(() => {
-            map.target.invalidateSize();
-          }, 100);
-        }}
+        zoom={12}
+        ref={mapRef}
+        className="w-full h-full"
+        zoomControl={true}
+        style={{ zIndex: 1, borderRadius: '0' }}
       >
+        {/* Fit Bounds */}
+        <FitBounds properties={properties} />
+
+        {/* Tile Layer */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapUpdater properties={validProperties} />
-
+        {/* Marker Cluster Group */}
         <MarkerClusterGroup
           chunkedLoading
           iconCreateFunction={createClusterCustomIcon}
+          maxClusterRadius={50}
           spiderfyOnMaxZoom={true}
           showCoverageOnHover={false}
           zoomToBoundsOnClick={true}
-          maxClusterRadius={50}
         >
-          {validProperties.map((property) => {
-            const lat = property.location.address.coordinate.lat;
-            const lon = property.location.address.coordinate.lon;
-            const price = property.list_price || 0;
-            const propertyId = property.property_id;
+          {properties.map((property, index) => {
+            const lat = property.location?.address?.coordinate?.lat;
+            const lon = property.location?.address?.coordinate?.lon;
 
+            if (!lat || !lon) return null;
+
+            const price = property.list_price || property.price || 0;
             const address = property.location?.address?.line || 'Address not available';
             const city = property.location?.address?.city || '';
             const state = property.location?.address?.state_code || '';
@@ -116,66 +78,59 @@ const PropertyMap = ({ properties, selectedProperty, onPropertyClick }) => {
 
             return (
               <Marker
-                key={propertyId}
+                key={property.property_id || index}
                 position={[lat, lon]}
                 icon={createCustomIcon(price)}
                 eventHandlers={{
-                  click: () => handleMarkerClick(property),
+                  click: () => {
+                    if (onPropertyClick) {
+                      onPropertyClick(property);
+                    }
+                  },
                 }}
               >
-                <Popup maxWidth={280} closeButton={true}>
+                <Popup maxWidth={300} className="custom-popup">
                   <div className="p-2">
                     {/* Property Image */}
                     {image && (
                       <img
                         src={image}
                         alt={address}
-                        className="w-full h-40 object-cover rounded-lg mb-3"
+                        className="w-full h-32 object-cover rounded-lg mb-2"
                         onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/280x160?text=No+Image';
+                          e.target.style.display = 'none';
                         }}
                       />
                     )}
 
                     {/* Price */}
                     <div className="text-xl font-bold text-gray-900 mb-2">
-                      ${price.toLocaleString()}
+                      {formatPrice(price)}
                     </div>
 
-                    {/* Beds, Baths, Sqft */}
-                    <div className="flex items-center gap-3 mb-3 text-gray-600">
-                      {beds > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Bed className="w-4 h-4" />
-                          <span className="text-sm">{beds} bd</span>
-                        </div>
-                      )}
-                      {baths > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Bath className="w-4 h-4" />
-                          <span className="text-sm">{baths} ba</span>
-                        </div>
-                      )}
-                      {sqft > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Square className="w-4 h-4" />
-                          <span className="text-sm">{sqft.toLocaleString()} sqft</span>
-                        </div>
-                      )}
+                    {/* Property Details */}
+                    <div className="flex gap-3 text-sm text-gray-600 mb-2">
+                      {beds > 0 && <span>{beds} beds</span>}
+                      {baths > 0 && <span>{baths} baths</span>}
+                      {sqft > 0 && <span>{sqft.toLocaleString()} sqft</span>}
                     </div>
 
                     {/* Address */}
-                    <div className="text-sm text-gray-600 mb-3">
+                    <div className="text-sm text-gray-700">
                       <div className="font-medium">{address}</div>
                       <div>
-                        {city}{city && state && ', '}{state}
+                        {city}
+                        {city && state && ', '}
+                        {state}
                       </div>
                     </div>
 
                     {/* View Details Button */}
                     <button
-                      onClick={(e) => handleViewDetails(propertyId, e)}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                      onClick={() => {
+                        window.location.href = `/property/${property.property_id}`;
+                      }}
+                      className="mt-3 w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium"
                     >
                       View Details
                     </button>
@@ -187,33 +142,33 @@ const PropertyMap = ({ properties, selectedProperty, onPropertyClick }) => {
         </MarkerClusterGroup>
       </MapContainer>
 
-      {/* Property Count Badge */}
-      <div className="absolute top-4 left-4 bg-white px-4 py-2 rounded-lg shadow-lg z-[1000]">
-        <span className="text-sm font-semibold text-gray-700">
-          {validProperties.length} {validProperties.length === 1 ? 'Property' : 'Properties'} on Map
-        </span>
+      {/* Price Legend - Top Left */}
+      <div className="absolute bottom-4 left-4 z-[1000] bg-white px-4 py-3 rounded-lg shadow-lg border border-gray-200">
+        <div className="text-xs font-bold text-gray-900 mb-2">PRICE RANGE</div>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#10B981]"></div>
+            <span className="text-xs text-gray-700">Under $500K</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#3B82F6]"></div>
+            <span className="text-xs text-gray-700">$500K - $700K</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#F59E0B]"></div>
+            <span className="text-xs text-gray-700">$700K - $950K</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#EF4444]"></div>
+            <span className="text-xs text-gray-700">Over $950K</span>
+          </div>
+        </div>
       </div>
 
-      {/* Price Legend */}
-      <div className="absolute bottom-4 left-4 bg-white px-4 py-3 rounded-lg shadow-lg z-[1000]">
-        <div className="text-xs font-semibold text-gray-700 mb-2">Price Range</div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-xs text-gray-600">&lt; $500K</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-xs text-gray-600">$500K - $700K</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-            <span className="text-xs text-gray-600">$700K - $950K</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <span className="text-xs text-gray-600">&gt; $950K</span>
-          </div>
+      {/* Property Count Badge - Bottom Left */}
+      <div className="absolute top-4 right-4 z-[1000] bg-white px-4 py-2 rounded-lg shadow-lg border border-gray-200">
+        <div className="text-sm font-semibold text-gray-900">
+          {properties.length} {properties.length === 1 ? 'property' : 'properties'}
         </div>
       </div>
     </div>
