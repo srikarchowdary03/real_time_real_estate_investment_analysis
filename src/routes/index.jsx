@@ -10,6 +10,7 @@ import TestButtons from '../pages/TestButtons';
 // Main Pages
 import Home from '../pages/Home';
 import Properties from '../pages/Properties';
+import PropertyDetails from '../pages/PropertyDetails'; // 🆕 Import PropertyDetails
 import Calculators from '../pages/Calculators';
 import About from '../pages/About';
 import SignIn from '../pages/Auth/SignIn';
@@ -29,6 +30,10 @@ const router = createBrowserRouter([
       {
         path: 'properties',
         element: <Properties />,
+      },
+      {
+        path: 'property/:id', // 🆕 Dynamic route for individual property details
+        element: <PropertyDetails />,
       },
       {
         path: 'calculators',
