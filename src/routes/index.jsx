@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 import APITest from '../pages/APITest';
 import MapTest from '../pages/MapTest';
 import TestButtons from '../pages/TestButtons';
+import Property from '../pages/Property';
 
 
 // Import pages
@@ -49,6 +50,10 @@ const router = createBrowserRouter([
       {
         path: 'map-test', // Add this route for testing
         element: <MapTest />,
+      },
+      {
+        path: 'property/:id',
+        element: <Property />,
       },
       {
         path: 'test-buttons',
