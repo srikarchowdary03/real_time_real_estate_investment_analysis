@@ -1,17 +1,21 @@
 import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
+
+// Test & Utility Pages
 import APITest from '../pages/APITest';
 import MapTest from '../pages/MapTest';
 import TestButtons from '../pages/TestButtons';
 
-
-// Import pages
+// Main Pages
 import Home from '../pages/Home';
 import Properties from '../pages/Properties';
 import Calculators from '../pages/Calculators';
 import About from '../pages/About';
 import SignIn from '../pages/Auth/SignIn';
+
+// 🆕 New Page
+import InvestorProfile from '../pages/InvestorProfile';
 
 const router = createBrowserRouter([
   {
@@ -31,6 +35,10 @@ const router = createBrowserRouter([
         element: <Calculators />,
       },
       {
+        path: 'investor', // 🆕 New Route for Investor Profile
+        element: <InvestorProfile />,
+      },
+      {
         path: 'about',
         element: <About />,
       },
@@ -47,7 +55,7 @@ const router = createBrowserRouter([
         element: <APITest />,
       },
       {
-        path: 'map-test', // Add this route for testing
+        path: 'map-test',
         element: <MapTest />,
       },
       {
