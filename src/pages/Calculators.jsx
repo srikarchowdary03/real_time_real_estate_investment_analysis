@@ -11,7 +11,10 @@ const Calculators = () => {
           <p className="text-xl text-gray-600 mb-8">
             Powerful tools for analyzing real estate investments
           </p>
+
+          {/* Calculator Grid */}
           <div className="grid md:grid-cols-2 gap-6">
+            {/* Rental Property */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <div className="text-5xl mb-4">🏠</div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
@@ -22,6 +25,8 @@ const Calculators = () => {
               </p>
               <span className="text-sm text-gray-500">Coming soon</span>
             </div>
+
+            {/* Fix & Flip */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <div className="text-5xl mb-4">🔨</div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
@@ -29,6 +34,30 @@ const Calculators = () => {
               </h3>
               <p className="text-gray-600 mb-4">
                 Analyze renovation projects and profits
+              </p>
+              <span className="text-sm text-gray-500">Coming soon</span>
+            </div>
+
+            {/* Wholesaling */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+              <div className="text-5xl mb-4">🤝</div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Wholesaling
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Estimate assignment fees and deal spread
+              </p>
+              <span className="text-sm text-gray-500">Coming soon</span>
+            </div>
+
+            {/* Rehab Estimator */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+              <div className="text-5xl mb-4">🛠️</div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Rehab Estimator
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Estimate repair costs and project budgets
               </p>
               <span className="text-sm text-gray-500">Coming soon</span>
             </div>

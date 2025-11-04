@@ -16,18 +16,15 @@ const Header = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
-
     return unsubscribe;
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -46,7 +43,6 @@ const Header = () => {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-red-600 rounded flex items-center justify-center">
               <span className="text-white font-bold text-lg">RE</span>
@@ -56,59 +52,60 @@ const Header = () => {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
             >
               Home
             </Link>
-            <Link 
-              to="/properties" 
+            <Link
+              to="/properties"
               className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
             >
               Properties
             </Link>
-            <Link 
-              to="/calculators" 
+            <Link
+              to="/calculators"
               className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
             >
               Calculators
             </Link>
-            <Link 
-              to="/about" 
+            <Link
+              to="/investor"
+              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            >
+              Investor Profile
+            </Link>
+            <Link
+              to="/about"
               className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
             >
               About
             </Link>
           </nav>
 
-          {/* Desktop Auth Section */}
           <div className="hidden md:flex items-center gap-3">
             {currentUser ? (
               <div className="relative" ref={dropdownRef}>
-                {/* User Button */}
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
                 >
                   <User className="w-4 h-4" />
                   <span>{currentUser.email?.split('@')[0]}</span>
-                  <svg 
-                    className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
-                {/* Dropdown Menu */}
                 {isDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                    {/* User Info Section */}
                     <div className="px-4 py-3 border-b border-gray-200">
                       <p className="text-sm font-medium text-gray-900">
                         {currentUser.displayName || 'User'}
@@ -118,7 +115,6 @@ const Header = () => {
                       </p>
                     </div>
 
-                    {/* Menu Items */}
                     <Link
                       to="/profile"
                       onClick={() => setIsDropdownOpen(false)}
@@ -140,7 +136,6 @@ const Header = () => {
                     <button
                       onClick={() => {
                         setIsDropdownOpen(false);
-                        // You can add settings page later
                         alert('Settings coming soon!');
                       }}
                       className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -162,8 +157,8 @@ const Header = () => {
                 )}
               </div>
             ) : (
-              <Link 
-                to="/signin" 
+              <Link
+                to="/signin"
                 className="px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
               >
                 Sign in
@@ -171,20 +166,14 @@ const Header = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 text-gray-600 hover:text-gray-900"
           >
-            {isMenuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
 
-        {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200">
             <nav className="flex flex-col gap-4">
@@ -210,17 +199,24 @@ const Header = () => {
                 Calculators
               </Link>
               <Link
+                to="/investor"
+                className="text-gray-700 hover:text-gray-900 font-medium py-2"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Investor Profile
+              </Link>
+              <Link
                 to="/about"
                 className="text-gray-700 hover:text-gray-900 font-medium py-2"
                 onClick={() => setIsMenuOpen(false)}
               >
                 About
               </Link>
+
               <hr className="border-gray-200" />
-              
+
               {currentUser ? (
                 <>
-                  {/* User Info in Mobile */}
                   <div className="px-2 py-2 bg-gray-50 rounded-md">
                     <p className="text-sm font-medium text-gray-900">
                       {currentUser.displayName || 'User'}
