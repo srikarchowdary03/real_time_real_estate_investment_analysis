@@ -12,6 +12,7 @@ import {
   getPropertySurroundings,
   calculateMortgage
 } from '../services/realtyAPI';
+import InvestmentCalculator from '../components/features/InvestmentCalculator'; // adjust path as needed
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -348,7 +349,7 @@ const PropertyDetails = () => {
                 )}
               </div>
             </div>
-
+            
             {/* Tabs */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="flex border-b overflow-x-auto">
@@ -384,6 +385,16 @@ const PropertyDetails = () => {
                     Mortgage
                   </button>
                 )}
+                <button
+                    onClick={() => setActiveTab('investment')}
+                    className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
+                      activeTab === 'investment'
+                        ? 'text-red-600 border-b-2 border-red-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Investment Analysis
+                  </button>
               </div>
 
               <div className="p-6">
@@ -500,6 +511,9 @@ const PropertyDetails = () => {
                     </div>
                   </div>
                 )}
+                {activeTab === 'investment' && (
+      <InvestmentCalculator property={property} />
+    )}
               </div>
             </div>
 
