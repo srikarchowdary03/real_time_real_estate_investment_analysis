@@ -17,6 +17,7 @@ import SignIn from '../pages/Auth/SignIn';
 
 // 🆕 New Page
 import InvestorProfile from '../pages/InvestorProfile';
+import ZillowAPITest from '../pages/ZillowAPITest';
 
 const router = createBrowserRouter([
   {
@@ -62,6 +63,10 @@ const router = createBrowserRouter([
       {
         path: 'map-test',
         element: <MapTest />,
+      },
+      {
+        path: 'zillow-test',
+        element: <ZillowAPITest />,
       },
       {
         path: 'test-buttons',
