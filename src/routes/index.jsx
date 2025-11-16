@@ -18,6 +18,7 @@ import SignIn from '../pages/Auth/SignIn';
 // 🆕 New Page
 import InvestorProfile from '../pages/InvestorProfile';
 import ZillowAPITest from '../pages/ZillowAPITest';
+import DatabaseTest from '../pages/DatabaseTest';
 
 const router = createBrowserRouter([
   {
@@ -63,6 +64,10 @@ const router = createBrowserRouter([
       {
         path: 'map-test',
         element: <MapTest />,
+      },
+      {
+        path: 'database-test',
+        element: <DatabaseTest />,
       },
       {
         path: 'zillow-test',

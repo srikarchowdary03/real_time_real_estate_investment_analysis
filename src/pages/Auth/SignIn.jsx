@@ -1,8 +1,7 @@
 // pages/Auth/SignIn.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth } from "../../firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { useAuth } from '../../hooks/useAuth';
 
 const SignIn = () => {
   const [activeTab, setActiveTab] = useState('signin');
@@ -10,34 +9,51 @@ const SignIn = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login, signup } = useAuth();
 
   // Handle Sign In
   const handleSignIn = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      alert("Signed in successfully!");
+      await login(email, password);
       navigate('/'); // Redirect to home page
     } catch (error) {
-      alert(error.message);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   // Handle Sign Up
   const handleSignUp = async (e) => {
     e.preventDefault();
+    setError("");
+
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      setError("Passwords do not match!");
       return;
     }
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      alert("Account created successfully!");
+      await signup(email, password, fullName);
       navigate('/'); // Redirect to home page
     } catch (error) {
-      alert(error.message);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,10 +69,20 @@ const SignIn = () => {
           </Link>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-6">
           <button
-            onClick={() => setActiveTab('signin')}
+            onClick={() => {
+              setActiveTab('signin');
+              setError("");
+            }}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
               activeTab === 'signin'
                 ? 'text-red-600 border-b-2 border-red-600'
@@ -66,7 +92,10 @@ const SignIn = () => {
             Sign In
           </button>
           <button
-            onClick={() => setActiveTab('signup')}
+            onClick={() => {
+              setActiveTab('signup');
+              setError("");
+            }}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
               activeTab === 'signup'
                 ? 'text-red-600 border-b-2 border-red-600'
@@ -97,6 +126,7 @@ const SignIn = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="you@example.com"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -111,12 +141,13 @@ const SignIn = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center">
-                  <input type="checkbox" className="mr-2 rounded" />
+                  <input type="checkbox" className="mr-2 rounded" disabled={loading} />
                   <span className="text-gray-600">Remember me</span>
                 </label>
                 <a href="#" className="text-red-600 hover:text-red-700 font-medium">
@@ -126,9 +157,10 @@ const SignIn = () => {
 
               <button
                 type="submit"
-                className="w-full px-4 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
+                disabled={loading}
+                className="w-full px-4 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign in
+                {loading ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
           </div>
@@ -153,6 +185,7 @@ const SignIn = () => {
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="John Doe"
+                  disabled={loading}
                 />
               </div>
 
@@ -167,6 +200,7 @@ const SignIn = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="you@example.com"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -181,6 +215,8 @@ const SignIn = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
+                  minLength={6}
                 />
               </div>
 
@@ -195,14 +231,17 @@ const SignIn = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
+                  minLength={6}
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full px-4 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
+                disabled={loading}
+                className="w-full px-4 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create account
+                {loading ? 'Creating account...' : 'Create account'}
               </button>
             </form>
           </div>
