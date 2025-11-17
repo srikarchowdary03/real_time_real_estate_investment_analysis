@@ -10,12 +10,13 @@ import TestButtons from '../pages/TestButtons';
 // Main Pages
 import Home from '../pages/Home';
 import Properties from '../pages/Properties';
-import PropertyDetails from '../pages/PropertyDetails'; // 🆕 Import PropertyDetails
+import PropertyDetails from '../pages/PropertyDetails';
+import PropertyAnalysisPage from '../pages/PropertyAnalysisPage'; // 🆕 Import Calculator Page
 import Calculators from '../pages/Calculators';
 import About from '../pages/About';
 import SignIn from '../pages/Auth/SignIn';
 
-// 🆕 New Page
+// Other Pages
 import InvestorProfile from '../pages/InvestorProfile';
 import ZillowAPITest from '../pages/ZillowAPITest';
 import DatabaseTest from '../pages/DatabaseTest';
@@ -34,15 +35,19 @@ const router = createBrowserRouter([
         element: <Properties />,
       },
       {
-        path: 'property/:id', // 🆕 Dynamic route for individual property details
+        path: 'property/:id',
         element: <PropertyDetails />,
+      },
+      {
+        path: 'property/:propertyId/analyze', // 🆕 Investment Calculator Route
+        element: <PropertyAnalysisPage />,
       },
       {
         path: 'calculators',
         element: <Calculators />,
       },
       {
-        path: 'investor', // 🆕 New Route for Investor Profile
+        path: 'investor',
         element: <InvestorProfile />,
       },
       {
