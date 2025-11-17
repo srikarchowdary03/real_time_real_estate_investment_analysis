@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bed, Bath, Square, DollarSign } from 'lucide-react';
+import { Bed, Bath, Square, DollarSign, Calculator } from 'lucide-react';
 import { getPropertyData } from '../../services/zillowAPI';
 
 const PropertyCard = ({ property, isSelected, onHover }) => {
@@ -54,6 +54,30 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
   // Calculate potential ROI if rent data is available
   const rentEstimate = zillowData?.rent;
   const monthlyROI = rentEstimate && price ? ((rentEstimate / price) * 100).toFixed(2) : null;
+
+  // Handle analyze button click - PASS DATA VIA STATE
+  const handleAnalyzeClick = (e) => {
+    e.stopPropagation();
+    
+    navigate(`/property/${property.property_id}/analyze`, {
+      state: { 
+        propertyData: {
+          ...property,
+          property_id: property.property_id,
+          zillowData: zillowData,
+          price: price,
+          address: address,
+          city: city,
+          state: state,
+          zipCode: zipCode,
+          beds: beds,
+          baths: baths,
+          sqft: sqft,
+          image: image
+        }
+      }
+    });
+  };
 
   return (
     <div
@@ -128,7 +152,7 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
         )}
 
         {/* Address */}
-        <div className="text-sm text-gray-600 leading-relaxed">
+        <div className="text-sm text-gray-600 leading-relaxed mb-4">
           <div className="font-medium text-gray-900 mb-1">
             {address}
           </div>
@@ -136,6 +160,15 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
             {city}{city && state && ', '}{state} {zipCode}
           </div>
         </div>
+
+        {/* Analyze Investment Button */}
+        <button
+          onClick={handleAnalyzeClick}
+          className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+        >
+          <Calculator className="w-4 h-4" />
+          Analyze Investment
+        </button>
       </div>
     </div>
   );
