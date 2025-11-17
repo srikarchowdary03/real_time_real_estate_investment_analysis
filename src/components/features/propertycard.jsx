@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bed, Bath, Square, DollarSign, Calculator } from 'lucide-react';
+import { Bed, Bath, Square, DollarSign, Calculator, Heart } from 'lucide-react';
 import { getPropertyData } from '../../services/zillowAPI';
+import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/database';
+import { useAuth } from '../../hooks/useAuth';
+import { calculateQuickScore } from '../../utils/investmentCalculations';
 
 const PropertyCard = ({ property, isSelected, onHover }) => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [zillowData, setZillowData] = useState(null);
   const [loadingZillow, setLoadingZillow] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingProperty, setSavingProperty] = useState(false);
+  const [quickMetrics, setQuickMetrics] = useState(null);
   
   const formatPrice = (price) => {
     if (!price) return 'N/A';
@@ -51,9 +58,98 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     fetchZillowData();
   }, [property.property_id]);
 
+  // Check if property is saved
+  useEffect(() => {
+    const checkSaved = async () => {
+      if (currentUser && property.property_id) {
+        const saved = await isPropertySaved(currentUser.uid, property.property_id);
+        setIsSaved(saved);
+      }
+    };
+    checkSaved();
+  }, [currentUser, property.property_id]);
+
+  // Calculate quick metrics when Zillow data is available
+  useEffect(() => {
+    if (zillowData?.rent && price) {
+      const metrics = calculateQuickScore(price, zillowData);
+      setQuickMetrics(metrics);
+    }
+  }, [zillowData, price]);
+
+  // Helper function to get score badge config
+  const getScoreBadge = (score) => {
+    const badges = {
+      good: {
+        label: 'Good Deal',
+        icon: '🟢',
+        bgColor: 'bg-green-100',
+        textColor: 'text-green-800',
+        borderColor: '#10b981'
+      },
+      okay: {
+        label: 'Okay Deal',
+        icon: '🟡',
+        bgColor: 'bg-yellow-100',
+        textColor: 'text-yellow-800',
+        borderColor: '#eab308'
+      },
+      poor: {
+        label: 'Poor Deal',
+        icon: '🔴',
+        bgColor: 'bg-red-100',
+        textColor: 'text-red-800',
+        borderColor: '#ef4444'
+      },
+      unknown: {
+        label: 'No Data',
+        icon: '⚪',
+        bgColor: 'bg-gray-100',
+        textColor: 'text-gray-800',
+        borderColor: '#d1d5db'
+      }
+    };
+    return badges[score] || badges.unknown;
+  };
+
+  // Helper to format currency
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined) return 'N/A';
+    const absValue = Math.abs(value);
+    const sign = value < 0 ? '-' : '+';
+    return `${sign}$${absValue.toLocaleString()}`;
+  };
+
   // Calculate potential ROI if rent data is available
   const rentEstimate = zillowData?.rent;
   const monthlyROI = rentEstimate && price ? ((rentEstimate / price) * 100).toFixed(2) : null;
+
+  // Handle save/unsave button click
+  const handleSaveClick = async (e) => {
+    e.stopPropagation();
+    
+    if (!currentUser) {
+      alert('Please sign in to save properties');
+      navigate('/login');
+      return;
+    }
+
+    setSavingProperty(true);
+    try {
+      if (isSaved) {
+        await unsaveProperty(currentUser.uid, property.property_id);
+        setIsSaved(false);
+      } else {
+        await saveProperty(currentUser.uid, property, zillowData, quickMetrics);
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error('Error saving property:', error);
+      alert('Failed to save property. Please try again.');
+    } finally {
+      setSavingProperty(false);
+    }
+  };
 
   // Handle analyze button click - PASS DATA VIA STATE
   const handleAnalyzeClick = (e) => {
@@ -79,6 +175,9 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     });
   };
 
+  // Get score badge configuration
+  const scoreBadge = quickMetrics ? getScoreBadge(quickMetrics.score) : null;
+
   return (
     <div
       id={`property-${property.property_id}`}
@@ -87,6 +186,9 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
       className={`bg-white rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
         isSelected ? 'ring-2 ring-red-600 shadow-xl' : 'border border-gray-200'
       }`}
+      style={{
+        borderLeft: scoreBadge ? `4px solid ${scoreBadge.borderColor}` : undefined
+      }}
     >
       {/* Property Image */}
       <div className="relative h-56 bg-gray-200 overflow-hidden">
@@ -98,16 +200,51 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
             e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
           }}
         />
-        {property.flags?.is_new_listing && (
-          <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold">
-            NEW
+        
+        {/* NEW/Saved Badges - Top Left */}
+        <div className="absolute top-3 left-3 flex gap-2">
+          {property.flags?.is_new_listing && (
+            <div className="bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold">
+              NEW
+            </div>
+          )}
+          {isSaved && (
+            <div className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold flex items-center gap-1">
+              <Heart className="w-3 h-3 fill-current" />
+              Saved
+            </div>
+          )}
+        </div>
+
+        {/* Save Button - Top Right */}
+        <button
+          onClick={handleSaveClick}
+          disabled={savingProperty}
+          className={`absolute top-3 right-3 p-2 rounded-full transition-all ${
+            isSaved 
+              ? 'bg-red-600 text-white hover:bg-red-700' 
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          } ${savingProperty ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <Heart 
+            className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`}
+          />
+        </button>
+
+        {/* Investment Score Badge - Bottom Left */}
+        {scoreBadge && (
+          <div className="absolute bottom-3 left-3">
+            <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
+              <span className="text-base">{scoreBadge.icon}</span>
+              <span>{scoreBadge.label}</span>
+            </div>
           </div>
         )}
         
-        {/* Rent Estimate Badge */}
+        {/* Rent Estimate Badge - Bottom Right */}
         {rentEstimate && (
-          <div className="absolute top-3 right-3 bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold">
-            Est. Rent: {formatPrice(rentEstimate)}/mo
+          <div className="absolute bottom-3 right-3 bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold">
+            Rent: {formatPrice(rentEstimate)}/mo
           </div>
         )}
       </div>
@@ -118,6 +255,37 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
         <div className="text-2xl font-bold text-gray-900 mb-3">
           {formatPrice(price)}
         </div>
+
+        {/* Quick Investment Metrics */}
+        {quickMetrics && quickMetrics.monthlyCashFlow !== undefined && (
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center gap-3 text-sm">
+              <div className="flex items-center gap-1">
+                <DollarSign className="w-4 h-4 text-blue-600" />
+                <span className={`font-semibold ${
+                  quickMetrics.monthlyCashFlow > 0 ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {formatCurrency(quickMetrics.monthlyCashFlow)}/mo
+                </span>
+                <span className="text-gray-500 text-xs">cash flow</span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-blue-700">
+                  {quickMetrics.capRate.toFixed(1)}%
+                </span>
+                <span className="text-gray-500 text-xs">cap rate</span>
+              </div>
+            </div>
+
+            {/* 1% Rule Indicator */}
+            {quickMetrics.passesOnePercent && (
+              <div className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
+                ✓ 1% Rule
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Beds, Baths, Sqft */}
         <div className="flex items-center gap-4 mb-3 text-gray-600">
@@ -140,16 +308,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
             </div>
           )}
         </div>
-
-        {/* Monthly ROI Badge */}
-        {monthlyROI && (
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">
-              <DollarSign className="w-3 h-3" />
-              <span>{monthlyROI}% Monthly Return</span>
-            </div>
-          </div>
-        )}
 
         {/* Address */}
         <div className="text-sm text-gray-600 leading-relaxed mb-4">
