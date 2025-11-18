@@ -6,7 +6,7 @@ import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/da
 import { useAuth } from '../../hooks/useAuth';
 import { calculateQuickScore } from '../../utils/investmentCalculations';
 
-const PropertyCard = ({ property, isSelected, onHover }) => {
+const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [zillowData, setZillowData] = useState(null);
@@ -34,12 +34,10 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
   const baths = property.description?.baths || 0;
   const sqft = property.description?.sqft || 0;
   
-  // Use Zillow photos if available, fallback to Realty API photos
   const image = (zillowData?.photos && zillowData.photos.length > 0) 
     ? zillowData.photos[0] 
     : (property.primary_photo?.href || property.photos?.[0]?.href || 'https://via.placeholder.com/400x300?text=No+Image');
 
-  // Fetch Zillow data for rent estimate and better photos
   useEffect(() => {
     const fetchZillowData = async () => {
       if (!address || !city || !state || !zipCode) return;
@@ -58,7 +56,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     fetchZillowData();
   }, [property.property_id]);
 
-  // Check if property is saved
   useEffect(() => {
     const checkSaved = async () => {
       if (currentUser && property.property_id) {
@@ -69,7 +66,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     checkSaved();
   }, [currentUser, property.property_id]);
 
-  // Calculate quick metrics when Zillow data is available
   useEffect(() => {
     if (zillowData?.rent && price) {
       const metrics = calculateQuickScore(price, zillowData);
@@ -77,7 +73,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     }
   }, [zillowData, price]);
 
-  // Helper function to get score badge config
   const getScoreBadge = (score) => {
     const badges = {
       good: {
@@ -112,7 +107,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     return badges[score] || badges.unknown;
   };
 
-  // Helper to format currency
   const formatCurrency = (value) => {
     if (value === null || value === undefined) return 'N/A';
     const absValue = Math.abs(value);
@@ -120,11 +114,8 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     return `${sign}$${absValue.toLocaleString()}`;
   };
 
-  // Calculate potential ROI if rent data is available
   const rentEstimate = zillowData?.rent;
-  const monthlyROI = rentEstimate && price ? ((rentEstimate / price) * 100).toFixed(2) : null;
 
-  // Handle save/unsave button click
   const handleSaveClick = async (e) => {
     e.stopPropagation();
     
@@ -151,7 +142,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     }
   };
 
-  // Handle analyze button click - PASS DATA VIA STATE
   const handleAnalyzeClick = (e) => {
     e.stopPropagation();
     
@@ -175,22 +165,24 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
     });
   };
 
-  // Get score badge configuration
+  const handleCardClick = () => {
+    onExpand();
+  };
+
   const scoreBadge = quickMetrics ? getScoreBadge(quickMetrics.score) : null;
 
   return (
     <div
       id={`property-${property.property_id}`}
       onMouseEnter={onHover}
-      onClick={() => navigate(`/property/${property.property_id}`)}
+      onClick={handleCardClick}
       className={`bg-white rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
         isSelected ? 'ring-2 ring-red-600 shadow-xl' : 'border border-gray-200'
-      }`}
+      } ${isExpanded ? 'ring-2 ring-blue-600 shadow-xl' : ''}`}
       style={{
         borderLeft: scoreBadge ? `4px solid ${scoreBadge.borderColor}` : undefined
       }}
     >
-      {/* Property Image */}
       <div className="relative h-56 bg-gray-200 overflow-hidden">
         <img
           src={image}
@@ -201,7 +193,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           }}
         />
         
-        {/* NEW/Saved Badges - Top Left */}
         <div className="absolute top-3 left-3 flex gap-2">
           {property.flags?.is_new_listing && (
             <div className="bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold">
@@ -216,7 +207,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           )}
         </div>
 
-        {/* Save Button - Top Right */}
         <button
           onClick={handleSaveClick}
           disabled={savingProperty}
@@ -231,7 +221,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           />
         </button>
 
-        {/* Investment Score Badge - Bottom Left */}
         {scoreBadge && (
           <div className="absolute bottom-3 left-3">
             <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
@@ -241,7 +230,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           </div>
         )}
         
-        {/* Rent Estimate Badge - Bottom Right */}
         {rentEstimate && (
           <div className="absolute bottom-3 right-3 bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold">
             Rent: {formatPrice(rentEstimate)}/mo
@@ -249,14 +237,11 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
         )}
       </div>
 
-      {/* Property Details */}
       <div className="p-4">
-        {/* Price */}
         <div className="text-2xl font-bold text-gray-900 mb-3">
           {formatPrice(price)}
         </div>
 
-        {/* Quick Investment Metrics */}
         {quickMetrics && quickMetrics.monthlyCashFlow !== undefined && (
           <div className="mb-3 space-y-2">
             <div className="flex items-center gap-3 text-sm">
@@ -278,7 +263,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
               </div>
             </div>
 
-            {/* 1% Rule Indicator */}
             {quickMetrics.passesOnePercent && (
               <div className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
                 ✓ 1% Rule
@@ -287,7 +271,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           </div>
         )}
 
-        {/* Beds, Baths, Sqft */}
         <div className="flex items-center gap-4 mb-3 text-gray-600">
           {beds > 0 && (
             <div className="flex items-center gap-1">
@@ -309,7 +292,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           )}
         </div>
 
-        {/* Address */}
         <div className="text-sm text-gray-600 leading-relaxed mb-4">
           <div className="font-medium text-gray-900 mb-1">
             {address}
@@ -319,7 +301,6 @@ const PropertyCard = ({ property, isSelected, onHover }) => {
           </div>
         </div>
 
-        {/* Analyze Investment Button */}
         <button
           onClick={handleAnalyzeClick}
           className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
