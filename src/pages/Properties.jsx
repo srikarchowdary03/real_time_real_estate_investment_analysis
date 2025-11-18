@@ -1,4 +1,4 @@
-// src/pages/Properties.jsx - FIXED VERSION
+// src/pages/Properties.jsx - Modified for Issue #60
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -20,6 +20,7 @@ const Properties = () => {
   const [viewMode, setViewMode] = useState('split');
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [filters, setFilters] = useState({});
+  const [expandedPropertyId, setExpandedPropertyId] = useState(null); // NEW: Track expanded property
 
   useEffect(() => {
     const zip = searchParams.get('zip');
@@ -116,7 +117,24 @@ const Properties = () => {
     setSelectedProperty(property);
   };
 
-  // Boundary handlers - now just updates state, PropertyMap handles filtering internally
+  // NEW: Handle property expand/collapse
+  const handlePropertyExpand = (propertyId) => {
+    if (expandedPropertyId === propertyId) {
+      setExpandedPropertyId(null); // Close if already expanded
+    } else {
+      setExpandedPropertyId(propertyId); // Open new one
+      
+      // Scroll to property card
+      setTimeout(() => {
+        const element = document.getElementById(`property-${propertyId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  };
+
+  // Boundary handlers
   const handleBoundaryCreated = (boundary) => {
     console.log('🎨 New boundary created:', boundary);
     setCurrentBoundary(boundary);
@@ -223,6 +241,8 @@ const Properties = () => {
                 viewMode={viewMode}
                 selectedProperty={selectedProperty}
                 onPropertyHover={handlePropertyHover}
+                expandedPropertyId={expandedPropertyId}
+                onPropertyExpand={handlePropertyExpand}
               />
             )}
 
