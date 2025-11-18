@@ -1,6 +1,5 @@
 import React from 'react';
-import PropertyCard from './propertycard';
-import ExpandedPropertyView from './ExpandedPropertyView';
+import PropertyCard from './PropertyCard';
 
 const PropertiesGrid = ({ 
   properties, 
@@ -43,69 +42,39 @@ const PropertiesGrid = ({
 
   const { marginRight, columns } = getLayoutConfig();
 
-  // Find the expanded property
-  const expandedProperty = properties.find(p => p.property_id === expandedPropertyId);
-
   return (
-    <>
+    <div 
+      className={`
+        transition-all duration-300
+        ${viewMode === 'split' 
+          ? 'overflow-y-auto px-4 py-8' 
+          : 'w-full'
+        }
+      `}
+      style={{
+        height: viewMode === 'split' ? 'calc(100vh - 89px)' : 'auto',
+        marginRight: marginRight,
+      }}
+    >
+      {/* Property Cards Grid - No duplicate header */}
       <div 
         className={`
-          transition-all duration-300
-          ${viewMode === 'split' 
-            ? 'overflow-y-auto px-4 py-8' 
-            : 'w-full'
-          }
+          grid gap-6 transition-all duration-300
+          ${viewMode === 'split' ? columns : columns}
         `}
-        style={{
-          height: viewMode === 'split' ? 'calc(100vh - 89px)' : 'auto',
-          marginRight: marginRight,
-        }}
       >
-        {/* Results Header */}
-        {currentLocation && (
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Homes for sale in {currentLocation}
-            </h1>
-            <p className="text-gray-600">
-              {properties.length} {properties.length === 1 ? 'property' : 'properties'} found
-              {Object.keys(filters).length > 0 && (
-                <span className="ml-2 text-red-600 font-semibold">
-                  (with {Object.keys(filters).length} filter{Object.keys(filters).length !== 1 ? 's' : ''})
-                </span>
-              )}
-            </p>
-          </div>
-        )}
-        
-        {/* Property Cards Grid */}
-        <div 
-          className={`
-            grid gap-6 transition-all duration-300
-            ${viewMode === 'split' ? columns : columns}
-          `}
-        >
-          {properties.map((property, index) => (
-            <PropertyCard 
-              key={property.property_id || index} 
-              property={property}
-              isSelected={selectedProperty?.property_id === property.property_id}
-              onHover={() => onPropertyHover(property)}
-              isExpanded={expandedPropertyId === property.property_id}
-              onExpand={() => onPropertyExpand(property.property_id)}
-            />
-          ))}
-        </div>
+        {properties.map((property, index) => (
+          <PropertyCard 
+            key={property.property_id || index} 
+            property={property}
+            isSelected={selectedProperty?.property_id === property.property_id}
+            onHover={() => onPropertyHover(property)}
+            isExpanded={expandedPropertyId === property.property_id}
+            onExpand={() => onPropertyExpand(property.property_id)}
+          />
+        ))}
       </div>
-
-      {/* Floating Modal Overlay - Rendered outside grid */}
-      {expandedProperty && (
-        <ExpandedPropertyView
-          property={expandedProperty}
-          onClose={() => onPropertyExpand(null)}
-        />
-      )}
-    </>
+    </div>
   );
 };
 

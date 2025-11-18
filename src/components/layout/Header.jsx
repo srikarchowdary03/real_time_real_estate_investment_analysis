@@ -53,6 +53,7 @@ const Header = () => {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
+          {/* Logo - Clicking goes to Home */}
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
               <span className="text-white font-bold text-lg">RE</span>
@@ -62,13 +63,8 @@ const Header = () => {
             </span>
           </Link>
 
+          {/* Desktop Navigation - Home button removed */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link
-              to="/"
-              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-            >
-              Home
-            </Link>
             <Link
               to="/properties"
               className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
@@ -84,6 +80,7 @@ const Header = () => {
             </Link>
           </nav>
 
+          {/* User Account Section */}
           <div className="hidden md:flex items-center gap-3">
             {currentUser ? (
               <div className="relative" ref={dropdownRef}>
@@ -174,6 +171,7 @@ const Header = () => {
             )}
           </div>
 
+          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 text-gray-600 hover:text-gray-900"
@@ -182,16 +180,10 @@ const Header = () => {
           </button>
         </div>
 
+        {/* Mobile Menu - Home button removed */}
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200 animate-slideDown">
             <nav className="flex flex-col gap-3">
-              <Link
-                to="/"
-                className="text-gray-700 hover:text-blue-600 font-medium py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Home
-              </Link>
               <Link
                 to="/properties"
                 className="text-gray-700 hover:text-blue-600 font-medium py-2"
