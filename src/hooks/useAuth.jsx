@@ -72,12 +72,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = {
-    user,
-    loading,
-    login,
-    signup,
-    logout,
-  };
+  currentUser: user,  // ← Changed this
+  user,               // ← Keep for backward compatibility
+  loading,
+  login,
+  signup,
+  logout,
+};
 
   return (
     <AuthContext.Provider value={value}>

@@ -2,24 +2,16 @@ import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 
-// Test & Utility Pages
-import APITest from '../pages/APITest';
-import MapTest from '../pages/MapTest';
-import TestButtons from '../pages/TestButtons';
-
 // Main Pages
 import Home from '../pages/Home';
 import Properties from '../pages/Properties';
+import MyProperties from '../pages/MyProperties';
+import Dashboard from '../pages/Dashboard';
+import Profile from '../pages/Profile';
+import Settings from '../pages/Settings';
 import PropertyDetails from '../pages/PropertyDetails';
-import PropertyAnalysisPage from '../pages/PropertyAnalysisPage'; // 🆕 Import Calculator Page
-import Calculators from '../pages/Calculators';
-import About from '../pages/About';
+import PropertyAnalysisPage from '../pages/PropertyAnalysisPage';
 import SignIn from '../pages/Auth/SignIn';
-
-// Other Pages
-import InvestorProfile from '../pages/InvestorProfile';
-import ZillowAPITest from '../pages/ZillowAPITest';
-import DatabaseTest from '../pages/DatabaseTest';
 
 const router = createBrowserRouter([
   {
@@ -35,24 +27,28 @@ const router = createBrowserRouter([
         element: <Properties />,
       },
       {
+        path: 'my-properties',
+        element: <MyProperties />,
+      },
+      {
+        path: 'dashboard',
+        element: <Dashboard />,
+      },
+      {
+        path: 'profile',
+        element: <Profile />,
+      },
+      {
+        path: 'settings',
+        element: <Settings />,
+      },
+      {
         path: 'property/:id',
         element: <PropertyDetails />,
       },
       {
-        path: 'property/:propertyId/analyze', // 🆕 Investment Calculator Route
+        path: 'property/:propertyId/analyze',
         element: <PropertyAnalysisPage />,
-      },
-      {
-        path: 'calculators',
-        element: <Calculators />,
-      },
-      {
-        path: 'investor',
-        element: <InvestorProfile />,
-      },
-      {
-        path: 'about',
-        element: <About />,
       },
       {
         path: 'signin',
@@ -61,26 +57,6 @@ const router = createBrowserRouter([
       {
         path: 'signup',
         element: <SignIn />,
-      },
-      {
-        path: 'api-test',
-        element: <APITest />,
-      },
-      {
-        path: 'map-test',
-        element: <MapTest />,
-      },
-      {
-        path: 'database-test',
-        element: <DatabaseTest />,
-      },
-      {
-        path: 'zillow-test',
-        element: <ZillowAPITest />,
-      },
-      {
-        path: 'test-buttons',
-        element: <TestButtons />,
       },
     ],
   },

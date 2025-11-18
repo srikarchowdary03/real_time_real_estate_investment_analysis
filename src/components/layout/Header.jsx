@@ -1,7 +1,6 @@
-// components/layout/Header.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, User, LogOut, Settings, LayoutDashboard } from 'lucide-react';
+import { Menu, X, User, LogOut, Heart, LayoutDashboard, Settings } from 'lucide-react';
 import { auth } from '../../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -29,6 +28,17 @@ const Header = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsDropdownOpen(false);
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -40,48 +50,37 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-red-600 rounded flex items-center justify-center">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
               <span className="text-white font-bold text-lg">RE</span>
             </div>
             <span className="font-bold text-xl text-gray-900">
-              Real Estate Analyzer
+              PropertyAnalyzer
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-6">
             <Link
               to="/"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
             >
               Home
             </Link>
             <Link
               to="/properties"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
             >
-              Properties
+              Search Properties
             </Link>
             <Link
-              to="/calculators"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              to="/my-properties"
+              className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center gap-1"
             >
-              Calculators
-            </Link>
-            <Link
-              to="/investor"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
-            >
-              Investor Profile
-            </Link>
-            <Link
-              to="/about"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
-            >
-              About
+              <Heart className="w-4 h-4" />
+              My Properties
             </Link>
           </nav>
 
@@ -90,7 +89,7 @@ const Header = () => {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
                 >
                   <User className="w-4 h-4" />
                   <span>{currentUser.email?.split('@')[0]}</span>
@@ -105,50 +104,59 @@ const Header = () => {
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 z-50 animate-fadeIn">
                     <div className="px-4 py-3 border-b border-gray-200">
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-semibold text-gray-900">
                         {currentUser.displayName || 'User'}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
                         {currentUser.email}
                       </p>
                     </div>
 
-                    <Link
-                      to="/profile"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <LayoutDashboard className="w-4 h-4" />
-                      Dashboard
-                    </Link>
+                    <div className="py-1">
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard
+                      </Link>
 
-                    <Link
-                      to="/profile"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <User className="w-4 h-4" />
-                      Profile
-                    </Link>
+                      <Link
+                        to="/my-properties"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <Heart className="w-4 h-4" />
+                        My Properties
+                      </Link>
 
-                    <button
-                      onClick={() => {
-                        setIsDropdownOpen(false);
-                        alert('Settings coming soon!');
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Settings
-                    </button>
+                      <Link
+                        to="/profile"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <User className="w-4 h-4" />
+                        Profile
+                      </Link>
 
-                    <hr className="my-2 border-gray-200" />
+                      <Link
+                        to="/settings"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </Link>
+                    </div>
+
+                    <hr className="my-1 border-gray-200" />
 
                     <button
                       onClick={handleLogout}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       Log out
@@ -159,7 +167,7 @@ const Header = () => {
             ) : (
               <Link
                 to="/signin"
-                className="px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
               >
                 Sign in
               </Link>
@@ -175,60 +183,47 @@ const Header = () => {
         </div>
 
         {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
-            <nav className="flex flex-col gap-4">
+          <div className="md:hidden py-4 border-t border-gray-200 animate-slideDown">
+            <nav className="flex flex-col gap-3">
               <Link
                 to="/"
-                className="text-gray-700 hover:text-gray-900 font-medium py-2"
+                className="text-gray-700 hover:text-blue-600 font-medium py-2"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Home
               </Link>
               <Link
                 to="/properties"
-                className="text-gray-700 hover:text-gray-900 font-medium py-2"
+                className="text-gray-700 hover:text-blue-600 font-medium py-2"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Properties
+                Search Properties
               </Link>
               <Link
-                to="/calculators"
-                className="text-gray-700 hover:text-gray-900 font-medium py-2"
+                to="/my-properties"
+                className="text-gray-700 hover:text-blue-600 font-medium py-2 flex items-center gap-2"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Calculators
-              </Link>
-              <Link
-                to="/investor"
-                className="text-gray-700 hover:text-gray-900 font-medium py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Investor Profile
-              </Link>
-              <Link
-                to="/about"
-                className="text-gray-700 hover:text-gray-900 font-medium py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                About
+                <Heart className="w-4 h-4" />
+                My Properties
               </Link>
 
               <hr className="border-gray-200" />
 
               {currentUser ? (
                 <>
-                  <div className="px-2 py-2 bg-gray-50 rounded-md">
-                    <p className="text-sm font-medium text-gray-900">
+                  <div className="px-3 py-2.5 bg-blue-50 rounded-lg">
+                    <p className="text-sm font-semibold text-gray-900">
                       {currentUser.displayName || 'User'}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-gray-500 truncate mt-0.5">
                       {currentUser.email}
                     </p>
                   </div>
 
                   <Link
-                    to="/profile"
-                    className="flex items-center gap-2 text-gray-700 hover:text-gray-900 font-medium py-2"
+                    to="/dashboard"
+                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <LayoutDashboard className="w-4 h-4" />
@@ -237,11 +232,20 @@ const Header = () => {
 
                   <Link
                     to="/profile"
-                    className="flex items-center gap-2 text-gray-700 hover:text-gray-900 font-medium py-2"
+                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <User className="w-4 h-4" />
                     Profile
+                  </Link>
+
+                  <Link
+                    to="/settings"
+                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
                   </Link>
 
                   <button
@@ -258,7 +262,7 @@ const Header = () => {
               ) : (
                 <Link
                   to="/signin"
-                  className="px-4 py-2 bg-red-600 text-white rounded-md font-medium text-center hover:bg-red-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-center hover:bg-blue-700"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Sign in
@@ -268,6 +272,23 @@ const Header = () => {
           </div>
         )}
       </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; max-height: 0; }
+          to { opacity: 1; max-height: 500px; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-slideDown {
+          animation: slideDown 0.3s ease-out;
+        }
+      `}</style>
     </header>
   );
 };
