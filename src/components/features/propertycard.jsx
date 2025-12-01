@@ -13,7 +13,6 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
   const [loadingZillow, setLoadingZillow] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savingProperty, setSavingProperty] = useState(false);
-  const [quickMetrics, setQuickMetrics] = useState(null);
   
   const formatPrice = (price) => {
     if (!price) return 'N/A';
@@ -38,6 +37,7 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     ? zillowData.photos[0] 
     : (property.primary_photo?.href || property.photos?.[0]?.href || 'https://via.placeholder.com/400x300?text=No+Image');
 
+  // Fetch Zillow data
   useEffect(() => {
     const fetchZillowData = async () => {
       if (!address || !city || !state || !zipCode) return;
@@ -56,6 +56,7 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     fetchZillowData();
   }, [property.property_id]);
 
+  // Check if saved
   useEffect(() => {
     const checkSaved = async () => {
       if (currentUser && property.property_id) {
@@ -66,12 +67,11 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     checkSaved();
   }, [currentUser, property.property_id]);
 
-  useEffect(() => {
-    if (zillowData?.rent && price) {
-      const metrics = calculateQuickScore(price, zillowData);
-      setQuickMetrics(metrics);
-    }
-  }, [zillowData, price]);
+  // Calculate metrics - do this immediately with available data
+  const rentEstimate = zillowData?.rent;
+  const quickMetrics = (price && rentEstimate) 
+    ? calculateQuickScore(price, zillowData) 
+    : null;
 
   const getScoreBadge = (score) => {
     const badges = {
@@ -83,21 +83,21 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
         borderColor: '#10b981'
       },
       okay: {
-        label: 'Okay Deal',
+        label: 'Fair Deal',
         icon: '🟡',
         bgColor: 'bg-yellow-100',
         textColor: 'text-yellow-800',
         borderColor: '#eab308'
       },
       poor: {
-        label: 'Poor Deal',
+        label: 'Risky Deal',
         icon: '🔴',
         bgColor: 'bg-red-100',
         textColor: 'text-red-800',
         borderColor: '#ef4444'
       },
       unknown: {
-        label: 'No Data',
+        label: 'Analyzing...',
         icon: '⚪',
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
@@ -113,8 +113,6 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     const sign = value < 0 ? '-' : '+';
     return `${sign}$${absValue.toLocaleString()}`;
   };
-
-  const rentEstimate = zillowData?.rent;
 
   const handleSaveClick = async (e) => {
     e.stopPropagation();
@@ -142,9 +140,22 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     }
   };
 
-  const handleAnalyzeClick = (e) => {
+  const handleAnalyzeClick = async (e) => {
     e.stopPropagation();
     
+    // 🆕 AUTO-SAVE TO FAVORITES when analyzing
+    if (currentUser && !isSaved) {
+      try {
+        await saveProperty(currentUser.uid, property, zillowData, quickMetrics);
+        setIsSaved(true);
+        console.log('✅ Property automatically added to favorites');
+      } catch (error) {
+        console.error('❌ Error auto-saving property:', error);
+        // Don't block navigation even if save fails
+      }
+    }
+    
+    // Navigate to analysis page
     navigate(`/property/${property.property_id}/analyze`, {
       state: { 
         propertyData: {
@@ -169,7 +180,10 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
     onExpand();
   };
 
-  const scoreBadge = quickMetrics ? getScoreBadge(quickMetrics.score) : null;
+  // Show badge even while loading - use "Analyzing..." badge
+  const scoreBadge = quickMetrics 
+    ? getScoreBadge(quickMetrics.score) 
+    : getScoreBadge('unknown');
 
   return (
     <div
@@ -180,7 +194,7 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
         isSelected ? 'ring-2 ring-red-600 shadow-xl' : 'border border-gray-200'
       } ${isExpanded ? 'ring-2 ring-blue-600 shadow-xl' : ''}`}
       style={{
-        borderLeft: scoreBadge ? `4px solid ${scoreBadge.borderColor}` : undefined
+        borderLeft: `4px solid ${scoreBadge.borderColor}`
       }}
     >
       <div className="relative h-56 bg-gray-200 overflow-hidden">
@@ -221,14 +235,13 @@ const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) =
           />
         </button>
 
-        {scoreBadge && (
-          <div className="absolute bottom-3 left-3">
-            <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
-              <span className="text-base">{scoreBadge.icon}</span>
-              <span>{scoreBadge.label}</span>
-            </div>
+        {/* ALWAYS show investment badge */}
+        <div className="absolute bottom-3 left-3">
+          <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
+            <span className="text-base">{scoreBadge.icon}</span>
+            <span>{scoreBadge.label}</span>
           </div>
-        )}
+        </div>
         
         {rentEstimate && (
           <div className="absolute bottom-3 right-3 bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold">
