@@ -3,29 +3,29 @@ import { X, Heart, Calculator, MapPin, Bed, Bath, Square, DollarSign } from 'luc
 import { useNavigate } from 'react-router-dom';
 import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/database';
 import { useAuth } from '../../hooks/useAuth';
-import { getPropertyData } from '../../services/zillowAPI';
-import { calculateQuickScore } from '../../utils/investmentCalculations';
+import { getPropertyDataOnHover, BADGE_CONFIG } from '../../services/zillowAPI_hasdata';
 
 const ExpandedPropertyView = ({ property, onClose }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const [zillowData, setZillowData] = useState(null);
-  const [quickMetrics, setQuickMetrics] = useState(null);
+  const [enrichedData, setEnrichedData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const address = property.location?.address?.line || 'Address not available';
-  const city = property.location?.address?.city || '';
-  const state = property.location?.address?.state_code || '';
-  const zipCode = property.location?.address?.postal_code || '';
+  const address = property.location?.address?.line || property.address || 'Address not available';
+  const city = property.location?.address?.city || property.city || '';
+  const state = property.location?.address?.state_code || property.state || '';
+  const zipCode = property.location?.address?.postal_code || property.zip || '';
   const price = property.list_price || property.price;
-  const beds = property.description?.beds || 0;
-  const baths = property.description?.baths || 0;
-  const sqft = property.description?.sqft || 0;
+  const beds = property.description?.beds || property.beds || 0;
+  const baths = property.description?.baths || property.baths || 0;
+  const sqft = property.description?.sqft || property.sqft || 0;
 
-  const image = property.primary_photo?.href || property.photos?.[0]?.href || 
-    'https://via.placeholder.com/800x500?text=No+Image';
+  const image = (enrichedData?.photos && enrichedData.photos.length > 0)
+    ? enrichedData.photos[0]
+    : (property.primary_photo?.href || property.photos?.[0]?.href || property.thumbnail || 
+       'https://placehold.co/800x500/png?text=No+Image');
 
   const formatPrice = (price) => {
     if (!price) return 'N/A';
@@ -44,47 +44,24 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     return `${sign}$${absValue.toLocaleString()}`;
   };
 
-  const getScoreBadge = (score) => {
-    const badges = {
-      good: {
-        label: 'Good Deal',
-        icon: '🟢',
-        bgColor: 'bg-green-100',
-        textColor: 'text-green-800'
-      },
-      okay: {
-        label: 'Okay Deal',
-        icon: '🟡',
-        bgColor: 'bg-yellow-100',
-        textColor: 'text-yellow-800'
-      },
-      poor: {
-        label: 'Poor Deal',
-        icon: '🔴',
-        bgColor: 'bg-red-100',
-        textColor: 'text-red-800'
-      },
-      unknown: {
-        label: 'No Data',
-        icon: '⚪',
-        bgColor: 'bg-gray-100',
-        textColor: 'text-gray-800'
-      }
-    };
-    return badges[score] || badges.unknown;
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const data = await getPropertyData(address, city, state, zipCode);
-        setZillowData(data);
+        const propertyForAPI = {
+          address,
+          city,
+          state,
+          zip: zipCode,
+          price,
+          beds,
+          baths,
+          sqft,
+          property_id: property.property_id
+        };
 
-        if (data?.rent && price) {
-          const metrics = calculateQuickScore(price, data);
-          setQuickMetrics(metrics);
-        }
+        const data = await getPropertyDataOnHover(propertyForAPI);
+        setEnrichedData(data);
 
         if (currentUser) {
           const saved = await isPropertySaved(currentUser.uid, property.property_id);
@@ -113,7 +90,7 @@ const ExpandedPropertyView = ({ property, onClose }) => {
         await unsaveProperty(currentUser.uid, property.property_id);
         setIsSaved(false);
       } else {
-        await saveProperty(currentUser.uid, property, zillowData, quickMetrics);
+        await saveProperty(currentUser.uid, property, enrichedData, enrichedData?.metrics);
         setIsSaved(true);
       }
     } catch (error) {
@@ -129,7 +106,7 @@ const ExpandedPropertyView = ({ property, onClose }) => {
       state: { 
         propertyData: {
           ...property,
-          zillowData,
+          enrichedData,
           price,
           address,
           city,
@@ -137,13 +114,15 @@ const ExpandedPropertyView = ({ property, onClose }) => {
           zipCode,
           beds,
           baths,
-          sqft
+          sqft,
+          image
         }
       }
     });
   };
 
-  const scoreBadge = quickMetrics ? getScoreBadge(quickMetrics.score) : null;
+  const badge = enrichedData?.investmentBadge || 'insufficient-data';
+  const badgeInfo = BADGE_CONFIG[badge];
 
   // Close on backdrop click
   const handleBackdropClick = (e) => {
@@ -186,14 +165,14 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                   alt={address}
                   className="w-full h-80 object-cover"
                   onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/800x500?text=No+Image';
+                    e.target.src = 'https://placehold.co/800x500/png?text=No+Image';
                   }}
                 />
-                {scoreBadge && !loading && (
+                {badgeInfo && !loading && (
                   <div className="absolute top-3 left-3">
-                    <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg`}>
-                      <span className="text-2xl">{scoreBadge.icon}</span>
-                      <span>{scoreBadge.label}</span>
+                    <div className={`${badgeInfo.color} ${badgeInfo.textColor} px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg`}>
+                      <span className="text-2xl">{badgeInfo.icon}</span>
+                      <span>{badgeInfo.label}</span>
                     </div>
                   </div>
                 )}
@@ -245,14 +224,19 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                     <p className="text-gray-600 text-lg">Calculating investment metrics...</p>
                   </div>
                 </div>
-              ) : quickMetrics ? (
+              ) : enrichedData && enrichedData.hasZillowData && enrichedData.metrics ? (
                 <div className="space-y-4">
                   {/* Rent Estimate */}
-                  {zillowData?.rent && (
+                  {enrichedData.rentEstimate && (
                     <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                      <div className="text-sm font-medium text-green-700 mb-1">Estimated Monthly Rent</div>
+                      <div className="text-sm font-medium text-green-700 mb-1">
+                        Estimated Monthly Rent
+                        {enrichedData.rentEstimated && (
+                          <span className="ml-2 text-xs">(Estimated)</span>
+                        )}
+                      </div>
                       <div className="text-3xl font-bold text-green-900">
-                        {formatPrice(zillowData.rent)}/mo
+                        {formatPrice(enrichedData.rentEstimate)}/mo
                       </div>
                     </div>
                   )}
@@ -266,9 +250,9 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                         Cash Flow
                       </div>
                       <div className={`text-2xl font-bold ${
-                        quickMetrics.monthlyCashFlow > 0 ? 'text-green-600' : 'text-red-600'
+                        enrichedData.cashFlow > 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {formatCurrency(quickMetrics.monthlyCashFlow)}/mo
+                        {formatCurrency(enrichedData.cashFlow)}/mo
                       </div>
                     </div>
 
@@ -276,7 +260,7 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                       <div className="text-sm text-gray-600 mb-2">Cap Rate</div>
                       <div className="text-2xl font-bold text-blue-600">
-                        {quickMetrics.capRate.toFixed(1)}%
+                        {enrichedData.metrics.capRate.toFixed(1)}%
                       </div>
                     </div>
 
@@ -284,9 +268,9 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                       <div className="text-sm text-gray-600 mb-2">CoC Return</div>
                       <div className={`text-2xl font-bold ${
-                        quickMetrics.cocReturn > 0 ? 'text-purple-600' : 'text-red-600'
+                        enrichedData.roi > 0 ? 'text-purple-600' : 'text-red-600'
                       }`}>
-                        {quickMetrics.cocReturn.toFixed(1)}%
+                        {enrichedData.roi}%
                       </div>
                     </div>
 
@@ -294,21 +278,66 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                       <div className="text-sm text-gray-600 mb-2">1% Rule</div>
                       <div className={`text-2xl font-bold ${
-                        quickMetrics.passesOnePercent ? 'text-green-600' : 'text-red-600'
+                        enrichedData.metrics.onePercentRule >= 1.0 ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {quickMetrics.passesOnePercent ? '✓ Pass' : '✗ Fail'}
+                        {enrichedData.metrics.onePercentRule >= 1.0 ? '✓ Pass' : '✗ Fail'}
                       </div>
                     </div>
                   </div>
 
-                  {/* Score Reason */}
-                  {quickMetrics.scoreReason && (
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                      <div className="text-blue-900 font-medium">
-                        {quickMetrics.scoreReason}
+                  {/* Investment Score */}
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-blue-700 mb-1">Investment Score</div>
+                        <div className="text-3xl font-bold text-blue-900">
+                          {enrichedData.investmentScore}/100
+                        </div>
+                      </div>
+                      <div className={`${badgeInfo.color} ${badgeInfo.textColor} px-4 py-2 rounded-lg font-bold flex items-center gap-2`}>
+                        <span className="text-2xl">{badgeInfo.icon}</span>
+                        <span>{badgeInfo.label}</span>
                       </div>
                     </div>
-                  )}
+                    <div className="mt-2 text-sm text-blue-900">
+                      {badgeInfo.description}
+                    </div>
+                  </div>
+
+                  {/* Monthly Expenses Breakdown */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="text-sm font-medium text-gray-700 mb-3">Monthly Expenses Breakdown</div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Mortgage</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.mortgage.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Property Tax</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.tax.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Insurance</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.insurance.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Maintenance</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.maintenance.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Vacancy Reserve</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.vacancy.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Property Management</span>
+                        <span className="font-medium">${enrichedData.metrics.expenseBreakdown.management.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-gray-300">
+                        <span className="font-semibold text-gray-900">Total Expenses</span>
+                        <span className="font-bold text-gray-900">${enrichedData.metrics.monthlyExpenses.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-center text-gray-500">
