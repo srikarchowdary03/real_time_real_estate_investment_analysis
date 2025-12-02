@@ -1,325 +1,319 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bed, Bath, Square, DollarSign, Calculator, Heart } from 'lucide-react';
-import { getPropertyData } from '../../services/zillowAPI';
+import { Bed, Bath, Square, MapPin, TrendingUp, Calculator, Heart } from 'lucide-react';
 import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/database';
 import { useAuth } from '../../hooks/useAuth';
-import { calculateQuickScore } from '../../utils/investmentCalculations';
 
-const PropertyCard = ({ property, isSelected, onHover, isExpanded, onExpand }) => {
+/**
+ * PropertyCard Component
+ * 
+ * Displays property in grid view with:
+ * - High quality image (upgraded from Realty API)
+ * - Basic property details
+ * - Quick metrics on hover (formula-based, NO API calls)
+ * - Click to expand for more details
+ */
+const PropertyCard = ({ 
+  property, 
+  isSelected = false,
+  onHover,
+  isExpanded = false,
+  onExpand
+}) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const [zillowData, setZillowData] = useState(null);
-  const [loadingZillow, setLoadingZillow] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [savingProperty, setSavingProperty] = useState(false);
-  
-  const formatPrice = (price) => {
-    if (!price) return 'N/A';
+  const [saving, setSaving] = useState(false);
+
+  // Extract property data with fallbacks
+  const address = property.location?.address?.line || property.address || 'Address not available';
+  const city = property.location?.address?.city || property.city || '';
+  const state = property.location?.address?.state_code || property.state || '';
+  const zipCode = property.location?.address?.postal_code || property.zip || '';
+  const price = property.list_price || property.price || 0;
+  const beds = property.description?.beds || property.beds || 0;
+  const baths = property.description?.baths || property.baths || 0;
+  const sqft = property.description?.sqft || property.sqft || 0;
+
+  // Get the best available image (already upgraded by realtyAPI)
+  const imageUrl = useMemo(() => {
+    if (imageError) return 'https://placehold.co/640x480/e2e8f0/64748b?text=No+Image';
+    
+    // Try different image sources in order of quality
+    return property.primaryPhoto ||
+           property.thumbnail ||
+           property.primary_photo?.href ||
+           property.photos?.[0]?.href ||
+           'https://placehold.co/640x480/e2e8f0/64748b?text=No+Image';
+  }, [property, imageError]);
+
+  // ===== FORMULA-BASED RENT ESTIMATE (No API) =====
+  const estimateRent = useMemo(() => {
+    if (!price || price <= 0) return 0;
+    
+    // Base: 0.6% of property price monthly
+    let estimate = price * 0.006;
+    
+    // Bedroom adjustments
+    if (beds >= 4) estimate *= 1.10;
+    else if (beds >= 3) estimate *= 1.05;
+    else if (beds <= 1) estimate *= 0.90;
+    
+    // Square footage adjustments
+    if (sqft > 2500) estimate *= 1.08;
+    else if (sqft > 2000) estimate *= 1.05;
+    else if (sqft < 1000) estimate *= 0.92;
+    
+    // Round to nearest $50
+    return Math.round(estimate / 50) * 50;
+  }, [price, beds, sqft]);
+
+  // ===== QUICK INVESTMENT METRICS =====
+  const quickMetrics = useMemo(() => {
+    if (!price || !estimateRent) return null;
+
+    const grossYield = ((estimateRent * 12) / price) * 100;
+    
+    // Simple cash flow estimate (rough)
+    const monthlyMortgage = (price * 0.80) * 0.006; // ~7% rate, 30yr approx
+    const monthlyExpenses = (price * 0.012 / 12) + (price * 0.004 / 12); // Tax + Insurance
+    const monthlyCashFlow = estimateRent - monthlyMortgage - monthlyExpenses - (estimateRent * 0.18);
+    
+    // Cap rate (simplified)
+    const annualNOI = (estimateRent * 12) * 0.65; // 35% expense ratio
+    const capRate = (annualNOI / price) * 100;
+
+    // Score based on gross yield
+    let score, label, color;
+    if (grossYield >= 12) { score = 85; label = 'Excellent'; color = 'emerald'; }
+    else if (grossYield >= 10) { score = 75; label = 'Good'; color = 'green'; }
+    else if (grossYield >= 8) { score = 60; label = 'Fair'; color = 'yellow'; }
+    else if (grossYield >= 6) { score = 40; label = 'Risky'; color = 'orange'; }
+    else { score = 25; label = 'Poor'; color = 'red'; }
+
+    return {
+      grossYield,
+      capRate,
+      monthlyCashFlow,
+      score,
+      label,
+      color
+    };
+  }, [price, estimateRent]);
+
+  // Format functions
+  const formatPrice = (value) => {
+    if (!value) return 'N/A';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(price);
+    }).format(value);
   };
 
-  const address = property.location?.address?.line || 'Address not available';
-  const city = property.location?.address?.city || '';
-  const state = property.location?.address?.state_code || '';
-  const zipCode = property.location?.address?.postal_code || '';
-  const price = property.list_price || property.price;
-  const beds = property.description?.beds || 0;
-  const baths = property.description?.baths || 0;
-  const sqft = property.description?.sqft || 0;
-  
-  const image = (zillowData?.photos && zillowData.photos.length > 0) 
-    ? zillowData.photos[0] 
-    : (property.primary_photo?.href || property.photos?.[0]?.href || 'https://via.placeholder.com/400x300?text=No+Image');
-
-  // Fetch Zillow data
-  useEffect(() => {
-    const fetchZillowData = async () => {
-      if (!address || !city || !state || !zipCode) return;
-      
-      setLoadingZillow(true);
-      try {
-        const data = await getPropertyData(address, city, state, zipCode);
-        setZillowData(data);
-      } catch (error) {
-        console.error('Error fetching Zillow data:', error);
-      } finally {
-        setLoadingZillow(false);
-      }
-    };
-
-    fetchZillowData();
-  }, [property.property_id]);
-
-  // Check if saved
-  useEffect(() => {
-    const checkSaved = async () => {
-      if (currentUser && property.property_id) {
-        const saved = await isPropertySaved(currentUser.uid, property.property_id);
-        setIsSaved(saved);
-      }
-    };
-    checkSaved();
-  }, [currentUser, property.property_id]);
-
-  // Calculate metrics - do this immediately with available data
-  const rentEstimate = zillowData?.rent;
-  const quickMetrics = (price && rentEstimate) 
-    ? calculateQuickScore(price, zillowData) 
-    : null;
-
-  const getScoreBadge = (score) => {
-    const badges = {
-      good: {
-        label: 'Good Deal',
-        icon: '🟢',
-        bgColor: 'bg-green-100',
-        textColor: 'text-green-800',
-        borderColor: '#10b981'
-      },
-      okay: {
-        label: 'Fair Deal',
-        icon: '🟡',
-        bgColor: 'bg-yellow-100',
-        textColor: 'text-yellow-800',
-        borderColor: '#eab308'
-      },
-      poor: {
-        label: 'Risky Deal',
-        icon: '🔴',
-        bgColor: 'bg-red-100',
-        textColor: 'text-red-800',
-        borderColor: '#ef4444'
-      },
-      unknown: {
-        label: 'Analyzing...',
-        icon: '⚪',
-        bgColor: 'bg-gray-100',
-        textColor: 'text-gray-800',
-        borderColor: '#d1d5db'
-      }
-    };
-    return badges[score] || badges.unknown;
+  // Handle card click - open expanded view
+  const handleCardClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onExpand) {
+      onExpand();
+    }
   };
 
-  const formatCurrency = (value) => {
-    if (value === null || value === undefined) return 'N/A';
-    const absValue = Math.abs(value);
-    const sign = value < 0 ? '-' : '+';
-    return `${sign}$${absValue.toLocaleString()}`;
+  // Handle mouse enter
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (onHover) onHover();
   };
 
+  // Handle mouse leave
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+  };
+
+  // Handle save
   const handleSaveClick = async (e) => {
+    e.preventDefault();
     e.stopPropagation();
     
     if (!currentUser) {
-      alert('Please sign in to save properties');
-      navigate('/login');
+      navigate('/signin');
       return;
     }
 
-    setSavingProperty(true);
+    setSaving(true);
     try {
+      const propertyData = {
+        property_id: property.property_id,
+        address,
+        city,
+        state,
+        zip: zipCode,
+        price,
+        beds,
+        baths,
+        sqft,
+        thumbnail: imageUrl,
+        rentEstimate: estimateRent,
+        rentSource: 'estimate'
+      };
+
       if (isSaved) {
         await unsaveProperty(currentUser.uid, property.property_id);
         setIsSaved(false);
       } else {
-        await saveProperty(currentUser.uid, property, zillowData, quickMetrics);
+        await saveProperty(currentUser.uid, propertyData);
         setIsSaved(true);
       }
     } catch (error) {
       console.error('Error saving property:', error);
-      alert('Failed to save property. Please try again.');
     } finally {
-      setSavingProperty(false);
+      setSaving(false);
     }
   };
 
-  const handleAnalyzeClick = async (e) => {
-    e.stopPropagation();
-    
-    // 🆕 AUTO-SAVE TO FAVORITES when analyzing
-    if (currentUser && !isSaved) {
-      try {
-        await saveProperty(currentUser.uid, property, zillowData, quickMetrics);
-        setIsSaved(true);
-        console.log('✅ Property automatically added to favorites');
-      } catch (error) {
-        console.error('❌ Error auto-saving property:', error);
-        // Don't block navigation even if save fails
-      }
-    }
-    
-    // Navigate to analysis page
-    navigate(`/property/${property.property_id}/analyze`, {
-      state: { 
-        propertyData: {
-          ...property,
-          property_id: property.property_id,
-          zillowData: zillowData,
-          price: price,
-          address: address,
-          city: city,
-          state: state,
-          zipCode: zipCode,
-          beds: beds,
-          baths: baths,
-          sqft: sqft,
-          image: image
-        }
-      }
-    });
+  // Get score color classes
+  const getScoreClasses = (color) => {
+    const colors = {
+      emerald: 'bg-emerald-500 text-white',
+      green: 'bg-green-500 text-white',
+      yellow: 'bg-yellow-500 text-white',
+      orange: 'bg-orange-500 text-white',
+      red: 'bg-red-500 text-white'
+    };
+    return colors[color] || 'bg-gray-500 text-white';
   };
-
-  const handleCardClick = () => {
-    onExpand();
-  };
-
-  // Show badge even while loading - use "Analyzing..." badge
-  const scoreBadge = quickMetrics 
-    ? getScoreBadge(quickMetrics.score) 
-    : getScoreBadge('unknown');
 
   return (
     <div
       id={`property-${property.property_id}`}
-      onMouseEnter={onHover}
+      className={`
+        bg-white rounded-xl overflow-hidden cursor-pointer
+        transition-all duration-300 ease-out
+        hover:shadow-xl hover:-translate-y-1
+        ${isSelected ? 'ring-2 ring-blue-500 shadow-lg' : 'shadow-md border border-gray-100'}
+      `}
       onClick={handleCardClick}
-      className={`bg-white rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-        isSelected ? 'ring-2 ring-red-600 shadow-xl' : 'border border-gray-200'
-      } ${isExpanded ? 'ring-2 ring-blue-600 shadow-xl' : ''}`}
-      style={{
-        borderLeft: `4px solid ${scoreBadge.borderColor}`
-      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      <div className="relative h-56 bg-gray-200 overflow-hidden">
+      {/* Image Container */}
+      <div className="relative h-48 bg-gray-200 overflow-hidden">
         <img
-          src={image}
+          src={imageUrl}
           alt={address}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-          }}
+          className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+          onError={() => setImageError(true)}
+          loading="lazy"
         />
         
-        <div className="absolute top-3 left-3 flex gap-2">
-          {property.flags?.is_new_listing && (
-            <div className="bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold">
-              NEW
-            </div>
-          )}
-          {isSaved && (
-            <div className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold flex items-center gap-1">
-              <Heart className="w-3 h-3 fill-current" />
-              Saved
-            </div>
-          )}
-        </div>
+        {/* New Listing Badge */}
+        {property.isNewListing && (
+          <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold shadow">
+            NEW
+          </div>
+        )}
 
+        {/* Investment Score Badge */}
+        {quickMetrics && (
+          <div className={`absolute top-3 right-3 px-2 py-1 rounded text-xs font-bold shadow ${getScoreClasses(quickMetrics.color)}`}>
+            {quickMetrics.score} • {quickMetrics.label}
+          </div>
+        )}
+
+        {/* Save Button */}
         <button
           onClick={handleSaveClick}
-          disabled={savingProperty}
-          className={`absolute top-3 right-3 p-2 rounded-full transition-all ${
-            isSaved 
-              ? 'bg-red-600 text-white hover:bg-red-700' 
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          } ${savingProperty ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={saving}
+          className={`
+            absolute bottom-3 right-3 p-2 rounded-full transition-all shadow-lg
+            ${isSaved 
+              ? 'bg-red-500 text-white' 
+              : 'bg-white/90 text-gray-600 hover:bg-white hover:text-red-500'
+            }
+          `}
         >
-          <Heart 
-            className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`}
-          />
+          <Heart className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
         </button>
 
-        {/* ALWAYS show investment badge */}
-        <div className="absolute bottom-3 left-3">
-          <div className={`${scoreBadge.bgColor} ${scoreBadge.textColor} px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
-            <span className="text-base">{scoreBadge.icon}</span>
-            <span>{scoreBadge.label}</span>
-          </div>
-        </div>
-        
-        {rentEstimate && (
-          <div className="absolute bottom-3 right-3 bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold">
-            Rent: {formatPrice(rentEstimate)}/mo
+        {/* Hover Overlay with Quick Metrics */}
+        {isHovered && quickMetrics && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-4 transition-opacity duration-300">
+            <div className="text-white">
+              <div className="flex items-center gap-2 mb-2">
+                <Calculator className="w-4 h-4" />
+                <span className="text-sm font-medium">Quick Estimate</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-white/70 text-xs">Est. Rent</p>
+                  <p className="font-bold">{formatPrice(estimateRent)}/mo</p>
+                </div>
+                <div>
+                  <p className="text-white/70 text-xs">Cap Rate</p>
+                  <p className="font-bold">{quickMetrics.capRate.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
+      {/* Content */}
       <div className="p-4">
-        <div className="text-2xl font-bold text-gray-900 mb-3">
-          {formatPrice(price)}
+        {/* Price */}
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl font-bold text-gray-900">
+            {formatPrice(price)}
+          </h3>
+          {estimateRent > 0 && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              ~{formatPrice(estimateRent)}/mo rent
+            </span>
+          )}
         </div>
 
-        {quickMetrics && quickMetrics.monthlyCashFlow !== undefined && (
-          <div className="mb-3 space-y-2">
-            <div className="flex items-center gap-3 text-sm">
-              <div className="flex items-center gap-1">
-                <DollarSign className="w-4 h-4 text-blue-600" />
-                <span className={`font-semibold ${
-                  quickMetrics.monthlyCashFlow > 0 ? 'text-green-700' : 'text-red-700'
-                }`}>
-                  {formatCurrency(quickMetrics.monthlyCashFlow)}/mo
-                </span>
-                <span className="text-gray-500 text-xs">cash flow</span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <span className="font-semibold text-blue-700">
-                  {quickMetrics.capRate.toFixed(1)}%
-                </span>
-                <span className="text-gray-500 text-xs">cap rate</span>
-              </div>
-            </div>
-
-            {quickMetrics.passesOnePercent && (
-              <div className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
-                ✓ 1% Rule
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center gap-4 mb-3 text-gray-600">
+        {/* Property Details */}
+        <div className="flex items-center gap-4 text-gray-600 mb-3">
           {beds > 0 && (
-            <div className="flex items-center gap-1">
-              <Bed className="w-4 h-4" />
-              <span className="text-sm font-medium">{beds} bd</span>
-            </div>
+            <span className="flex items-center gap-1 text-sm">
+              <Bed className="w-4 h-4" /> {beds} bd
+            </span>
           )}
           {baths > 0 && (
-            <div className="flex items-center gap-1">
-              <Bath className="w-4 h-4" />
-              <span className="text-sm font-medium">{baths} ba</span>
-            </div>
+            <span className="flex items-center gap-1 text-sm">
+              <Bath className="w-4 h-4" /> {baths} ba
+            </span>
           )}
           {sqft > 0 && (
-            <div className="flex items-center gap-1">
-              <Square className="w-4 h-4" />
-              <span className="text-sm font-medium">{sqft.toLocaleString()} sqft</span>
-            </div>
+            <span className="flex items-center gap-1 text-sm">
+              <Square className="w-4 h-4" /> {sqft.toLocaleString()} sqft
+            </span>
           )}
         </div>
 
-        <div className="text-sm text-gray-600 leading-relaxed mb-4">
-          <div className="font-medium text-gray-900 mb-1">
-            {address}
-          </div>
-          <div>
+        {/* Address */}
+        <div className="text-sm text-gray-600">
+          <p className="font-medium text-gray-800 truncate">{address}</p>
+          <p className="text-gray-500 flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
             {city}{city && state && ', '}{state} {zipCode}
-          </div>
+          </p>
         </div>
 
+        {/* Quick Action Button */}
         <button
-          onClick={handleAnalyzeClick}
-          className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCardClick(e);
+          }}
+          className="w-full mt-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
         >
-          <Calculator className="w-4 h-4" />
-          Analyze Investment
+          <TrendingUp className="w-4 h-4" />
+          View Analysis
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import PropertyCard from './propertycard';
 import ExpandedPropertyView from './ExpandedPropertyView';
 
@@ -12,6 +12,19 @@ const PropertiesGrid = ({
   expandedPropertyId,
   onPropertyExpand
 }) => {
+  // Deduplicate properties by property_id
+  const uniqueProperties = useMemo(() => {
+    const seen = new Set();
+    return properties.filter(property => {
+      const id = property.property_id;
+      if (!id || seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    });
+  }, [properties]);
+
   // Calculate optimal layout based on screen width
   const getLayoutConfig = () => {
     if (viewMode !== 'split') {
@@ -44,7 +57,7 @@ const PropertiesGrid = ({
   const { marginRight, columns } = getLayoutConfig();
 
   // Find the expanded property
-  const expandedProperty = properties.find(p => p.property_id === expandedPropertyId);
+  const expandedProperty = uniqueProperties.find(p => p.property_id === expandedPropertyId);
 
   return (
     <>
@@ -52,42 +65,27 @@ const PropertiesGrid = ({
         className={`
           transition-all duration-300
           ${viewMode === 'split' 
-            ? 'overflow-y-auto px-4 py-8' 
+            ? 'overflow-y-auto px-4 pb-8' 
             : 'w-full'
           }
         `}
         style={{
-          height: viewMode === 'split' ? 'calc(100vh - 89px)' : 'auto',
+          height: viewMode === 'split' ? 'calc(100vh - 150px)' : 'auto',
           marginRight: marginRight,
         }}
       >
-        {/* Results Header */}
-        {currentLocation && (
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Homes for sale in {currentLocation}
-            </h1>
-            <p className="text-gray-600">
-              {properties.length} {properties.length === 1 ? 'property' : 'properties'} found
-              {Object.keys(filters).length > 0 && (
-                <span className="ml-2 text-red-600 font-semibold">
-                  (with {Object.keys(filters).length} filter{Object.keys(filters).length !== 1 ? 's' : ''})
-                </span>
-              )}
-            </p>
-          </div>
-        )}
+        {/* NOTE: Header is rendered in Properties.jsx, not here - to prevent duplicate */}
         
         {/* Property Cards Grid */}
         <div 
           className={`
             grid gap-6 transition-all duration-300
-            ${viewMode === 'split' ? columns : columns}
+            ${columns}
           `}
         >
-          {properties.map((property, index) => (
+          {uniqueProperties.map((property, index) => (
             <PropertyCard 
-              key={property.property_id || index} 
+              key={`${property.property_id}-${property.listing_id || index}`}
               property={property}
               isSelected={selectedProperty?.property_id === property.property_id}
               onHover={() => onPropertyHover(property)}
