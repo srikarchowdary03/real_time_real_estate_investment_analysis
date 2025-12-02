@@ -1,5 +1,25 @@
-// src/utils/boundaryHelpers.js - FIXED VERSION
-// Works with property.location.address.coordinate.lat/lon structure
+// src/utils/boundaryHelpers.js
+// Boundary filtering utilities with support for multiple coordinate formats
+
+/**
+ * Get coordinates from property (supports multiple formats)
+ */
+export const getPropertyCoordinates = (property) => {
+  // Try nested structure first (raw API response)
+  const nestedLat = property.location?.address?.coordinate?.lat;
+  const nestedLon = property.location?.address?.coordinate?.lon;
+  
+  if (nestedLat && nestedLon) {
+    return { lat: nestedLat, lon: nestedLon };
+  }
+  
+  // Try flat structure (normalized properties)
+  if (property.lat && property.lon) {
+    return { lat: property.lat, lon: property.lon };
+  }
+  
+  return null;
+};
 
 /**
  * Check if a point is inside a circle
@@ -44,7 +64,8 @@ export const isPointInPolygon = (point, polygon) => {
 };
 
 /**
- * Filter properties within boundary - FIXED FOR YOUR API STRUCTURE
+ * Filter properties within boundary
+ * Supports both nested and flat coordinate structures
  */
 export const filterPropertiesInBoundary = (properties, boundary) => {
   if (!boundary || !properties || properties.length === 0) {
@@ -52,16 +73,15 @@ export const filterPropertiesInBoundary = (properties, boundary) => {
   }
 
   return properties.filter(property => {
-    // FIXED: Get coordinates from correct structure
-    const lat = property.location?.address?.coordinate?.lat;
-    const lon = property.location?.address?.coordinate?.lon;
+    // Get coordinates using helper function
+    const coords = getPropertyCoordinates(property);
 
     // Skip if no valid coordinates
-    if (!lat || !lon) {
+    if (!coords) {
       return false;
     }
 
-    const propertyPoint = [lat, lon];
+    const propertyPoint = [coords.lat, coords.lon];
 
     // Check based on boundary type
     if (boundary.type === 'circle') {
@@ -139,9 +159,9 @@ export const calculatePolygonArea = (polygon) => {
  */
 export const formatArea = (areaInMeters) => {
   if (areaInMeters < 1000000) {
-    return `${(areaInMeters / 1000).toFixed(2)} km²`;
+    return ${(areaInMeters / 1000).toFixed(2)} km²;
   }
-  return `${areaInMeters.toFixed(0)} m²`;
+  return ${areaInMeters.toFixed(0)} m²;
 };
 
 /**
@@ -149,7 +169,40 @@ export const formatArea = (areaInMeters) => {
  */
 export const formatDistance = (distanceInMeters) => {
   if (distanceInMeters < 1000) {
-    return `${distanceInMeters.toFixed(0)} m`;
+    return ${distanceInMeters.toFixed(0)} m;
   }
-  return `${(distanceInMeters / 1000).toFixed(2)} km`;
+  return ${(distanceInMeters / 1000).toFixed(2)} km;
+};
+
+/**
+ * Calculate distance between two points in meters
+ */
+export const calculateDistance = (point1, point2) => {
+  const [lat1, lng1] = point1;
+  const [lat2, lng2] = point2;
+  
+  const R = 6371000; // Earth's radius in meters
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+export default {
+  getPropertyCoordinates,
+  isPointInCircle,
+  isPointInPolygon,
+  filterPropertiesInBoundary,
+  getPropertiesCountInBoundary,
+  getPolygonCenter,
+  calculatePolygonArea,
+  calculateDistance,
+  formatArea,
+  formatDistance,
 };
