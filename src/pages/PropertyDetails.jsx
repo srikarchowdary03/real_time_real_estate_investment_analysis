@@ -1,4 +1,3 @@
-// src/pages/PropertyDetails.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -6,13 +5,8 @@ import {
   Home, Ruler, Car, Heart, Share2, Phone, Mail,
   ChevronLeft, ChevronRight, X
 } from 'lucide-react';
-import { 
-  getPropertyDetails, 
-  getSimilarHomes,
-  getPropertySurroundings,
-  calculateMortgage
-} from '../services/realtyAPI';
-import InvestmentCalculator from '../components/features/InvestmentCalculator'; // adjust path as needed
+import { searchProperties } from '../services/realtyAPI';
+import InvestmentCalculator from '../components/features/InvestmentCalculator';
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -24,14 +18,11 @@ const PropertyDetails = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [similarHomes, setSimilarHomes] = useState([]);
-  const [mortgage, setMortgage] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (id) {
       fetchPropertyDetails(id);
-      fetchAdditionalData(id);
     }
   }, [id]);
 
@@ -41,19 +32,15 @@ const PropertyDetails = () => {
     
     try {
       console.log('🏠 Fetching property details for:', propertyId);
-      const response = await getPropertyDetails(propertyId);
       
-      // The API returns data in different structures, handle both
-      const propertyData = response?.data?.home || response?.data || response;
+      const results = await searchProperties({
+        location: propertyId,
+        limit: 1
+      });
       
-      if (propertyData) {
-        setProperty(propertyData);
-        console.log('✅ Property loaded:', propertyData);
-        
-        // Calculate mortgage if price is available
-        if (propertyData.list_price) {
-          calculateMortgagePayment(propertyData.list_price);
-        }
+      if (results && results.length > 0) {
+        setProperty(results[0]);
+        console.log('✅ Property loaded:', results[0]);
       } else {
         setError('Property not found');
       }
@@ -62,31 +49,6 @@ const PropertyDetails = () => {
       setError('Failed to load property details. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAdditionalData = async (propertyId) => {
-    try {
-      // Fetch similar homes
-      const similarResponse = await getSimilarHomes(propertyId);
-      const similarData = similarResponse?.data?.home_search?.results || 
-                         similarResponse?.data?.results || 
-                         similarResponse?.results || [];
-      setSimilarHomes(similarData.slice(0, 4));
-      console.log('✅ Similar homes loaded:', similarData.length);
-    } catch (err) {
-      console.log('ℹ️ Additional data fetch failed (non-critical):', err.message);
-    }
-  };
-
-  const calculateMortgagePayment = async (price) => {
-    try {
-      const downpayment = price * 0.2; // 20% down
-      const mortgageResponse = await calculateMortgage(price, downpayment, 30, 7.5, 1.2, 150);
-      setMortgage(mortgageResponse?.data);
-      console.log('✅ Mortgage calculated:', mortgageResponse?.data);
-    } catch (err) {
-      console.log('ℹ️ Mortgage calculation failed:', err.message);
     }
   };
 
@@ -118,8 +80,8 @@ const PropertyDetails = () => {
 
   const handleShare = async () => {
     const shareData = {
-      title: property?.location?.address?.line || 'Property',
-      text: `Check out this property for ${formatPrice(property?.list_price)}`,
+      title: property?.address || 'Property',
+      text: `Check out this property for ${formatPrice(property?.price)}`,
       url: window.location.href,
     };
 
@@ -127,17 +89,12 @@ const PropertyDetails = () => {
       try {
         await navigator.share(shareData);
       } catch (err) {
-        // User cancelled or error occurred
+        console.log('Share cancelled');
       }
     } else {
       navigator.clipboard.writeText(window.location.href);
       alert('Link copied to clipboard!');
     }
-  };
-
-  const handleContactSubmit = (e) => {
-    e.preventDefault();
-    alert('Thank you! An agent will contact you soon.');
   };
 
   if (loading) {
@@ -167,24 +124,24 @@ const PropertyDetails = () => {
     );
   }
 
-  const photos = property.photos || (property.primary_photo ? [property.primary_photo] : []);
-  const currentPhoto = photos[currentImageIndex]?.href;
-  const address = property.location?.address?.line || 'Address not available';
-  const city = property.location?.address?.city || '';
-  const state = property.location?.address?.state_code || '';
-  const zipCode = property.location?.address?.postal_code || '';
-  const price = property.list_price || property.price || 0;
-  const beds = property.description?.beds || 0;
-  const baths = property.description?.baths || 0;
-  const sqft = property.description?.sqft || 0;
-  const lotSize = property.description?.lot_sqft || 0;
-  const yearBuilt = property.description?.year_built || null;
-  const propertyType = property.description?.type || 'Single Family';
-  const description = property.description?.text || property.description?.name || 'No description available.';
+  const photos = property.photos || (property.thumbnail ? [property.thumbnail] : []);
+  const currentPhoto = typeof photos[currentImageIndex] === 'string' 
+    ? photos[currentImageIndex] 
+    : photos[currentImageIndex]?.href;
+  const address = property.address || 'Address not available';
+  const city = property.city || '';
+  const state = property.state || '';
+  const zipCode = property.zip || '';
+  const price = property.price || 0;
+  const beds = property.beds || 0;
+  const baths = property.baths || 0;
+  const sqft = property.sqft || 0;
+  const lotSize = property.lotSize || 0;
+  const yearBuilt = property.yearBuilt || null;
+  const propertyType = property.propertyType || 'Single Family';
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -218,7 +175,6 @@ const PropertyDetails = () => {
         </div>
       </div>
 
-      {/* Image Gallery */}
       <div className="relative bg-black">
         <div className="container mx-auto">
           <div className="relative h-[400px] md:h-[500px] overflow-hidden">
@@ -229,7 +185,7 @@ const PropertyDetails = () => {
                 className="w-full h-full object-contain cursor-pointer"
                 onClick={() => setIsGalleryOpen(true)}
                 onError={(e) => {
-                  e.target.src = 'https://via.placeholder.com/1200x800?text=No+Image';
+                  e.target.src = 'https://placehold.co/1200x800/png?text=No+Image';
                 }}
               />
             ) : (
@@ -238,7 +194,7 @@ const PropertyDetails = () => {
               </div>
             )}
             
-            {property.flags?.is_new_listing && (
+            {property.isNewListing && (
               <div className="absolute top-6 left-6 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg">
                 NEW LISTING
               </div>
@@ -266,40 +222,39 @@ const PropertyDetails = () => {
             )}
           </div>
 
-          {/* Thumbnail Strip */}
           {photos.length > 1 && (
             <div className="flex gap-2 overflow-x-auto py-4 px-4">
-              {photos.slice(0, 10).map((photo, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentImageIndex(index)}
-                  className={`flex-shrink-0 w-20 h-16 md:w-24 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                    index === currentImageIndex
-                      ? 'border-red-600 scale-105'
-                      : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <img
-                    src={photo.href}
-                    alt={`View ${index + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/200x150?text=No+Image';
-                    }}
-                  />
-                </button>
-              ))}
+              {photos.slice(0, 10).map((photo, index) => {
+                const photoSrc = typeof photo === 'string' ? photo : photo.href;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentImageIndex(index)}
+                    className={`flex-shrink-0 w-20 h-16 md:w-24 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                      index === currentImageIndex
+                        ? 'border-red-600 scale-105'
+                        : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img
+                      src={photoSrc}
+                      alt={`View ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = 'https://placehold.co/200x150/png?text=No+Image';
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Property Details */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Price and Address */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
                 {formatPrice(price)}
@@ -317,7 +272,6 @@ const PropertyDetails = () => {
                 </div>
               </div>
 
-              {/* Key Features */}
               <div className="flex flex-wrap gap-4 md:gap-6 pt-4 border-t">
                 {beds > 0 && (
                   <div className="flex items-center gap-2">
@@ -340,17 +294,9 @@ const PropertyDetails = () => {
                     <span className="text-gray-600">Sqft</span>
                   </div>
                 )}
-                {property.description?.garage > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Car className="w-5 h-5 text-red-600" />
-                    <span className="text-lg font-semibold">{property.description.garage}</span>
-                    <span className="text-gray-600">Garage</span>
-                  </div>
-                )}
               </div>
             </div>
             
-            {/* Tabs */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="flex border-b overflow-x-auto">
                 <button
@@ -373,42 +319,29 @@ const PropertyDetails = () => {
                 >
                   Details
                 </button>
-                {mortgage && (
-                  <button
-                    onClick={() => setActiveTab('mortgage')}
-                    className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                      activeTab === 'mortgage'
-                        ? 'text-red-600 border-b-2 border-red-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Mortgage
-                  </button>
-                )}
                 <button
-                    onClick={() => setActiveTab('investment')}
-                    className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                      activeTab === 'investment'
-                        ? 'text-red-600 border-b-2 border-red-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Investment Analysis
-                  </button>
+                  onClick={() => setActiveTab('investment')}
+                  className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
+                    activeTab === 'investment'
+                      ? 'text-red-600 border-b-2 border-red-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Investment Analysis
+                </button>
               </div>
 
               <div className="p-6">
-                {/* Overview Tab */}
                 {activeTab === 'overview' && (
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-4">About This Home</h2>
                     <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                      {description}
+                      Beautiful {beds} bedroom, {baths} bathroom {propertyType.toLowerCase()} located in {city}, {state}. 
+                      This property features {sqft} square feet of living space and is perfect for families or investors.
                     </p>
                   </div>
                 )}
 
-                {/* Details Tab */}
                 {activeTab === 'details' && (
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-4">Property Details</h2>
@@ -438,159 +371,27 @@ const PropertyDetails = () => {
                           <span className="font-medium">{lotSize.toLocaleString()} sqft</span>
                         </div>
                       )}
-                      {property.description?.stories && (
+                      {property.daysOnMarket && (
                         <div className="flex justify-between py-3 border-b">
-                          <span className="text-gray-600">Stories</span>
-                          <span className="font-medium">{property.description.stories}</span>
-                        </div>
-                      )}
-                      {property.list_date && (
-                        <div className="flex justify-between py-3 border-b">
-                          <span className="text-gray-600">Listed Date</span>
-                          <span className="font-medium">
-                            {new Date(property.list_date).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                      {property.description?.garage > 0 && (
-                        <div className="flex justify-between py-3 border-b">
-                          <span className="text-gray-600 flex items-center gap-2">
-                            <Car className="w-4 h-4" />
-                            Parking
-                          </span>
-                          <span className="font-medium">{property.description.garage} Car Garage</span>
+                          <span className="text-gray-600">Days on Market</span>
+                          <span className="font-medium">{property.daysOnMarket} days</span>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Mortgage Tab */}
-                {activeTab === 'mortgage' && mortgage && (
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Mortgage Calculator</h2>
-                    <div className="space-y-4">
-                      <div className="bg-red-50 p-6 rounded-lg">
-                        <div className="text-sm text-gray-600 mb-2">Estimated Monthly Payment</div>
-                        <div className="text-4xl font-bold text-red-600">
-                          {formatPrice(mortgage.monthly_payment || 0)}
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <div className="text-sm text-gray-600 mb-1">Principal & Interest</div>
-                          <div className="text-xl font-semibold">
-                            {formatPrice(mortgage.principal_and_interest || 0)}
-                          </div>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <div className="text-sm text-gray-600 mb-1">Property Tax</div>
-                          <div className="text-xl font-semibold">
-                            {formatPrice(mortgage.tax || 0)}
-                          </div>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <div className="text-sm text-gray-600 mb-1">Home Insurance</div>
-                          <div className="text-xl font-semibold">
-                            {formatPrice(mortgage.hoi || 0)}
-                          </div>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <div className="text-sm text-gray-600 mb-1">Down Payment (20%)</div>
-                          <div className="text-xl font-semibold">
-                            {formatPrice(price * 0.2)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-gray-500 mt-4">
-                        * This is an estimate based on a 30-year loan at 7.5% interest rate. 
-                        Actual rates and payments may vary.
-                      </p>
-                    </div>
-                  </div>
-                )}
                 {activeTab === 'investment' && (
-      <InvestmentCalculator property={property} />
-    )}
+                  <InvestmentCalculator property={property} />
+                )}
               </div>
             </div>
-
-            {/* Similar Homes */}
-            {similarHomes.length > 0 && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Similar Homes</h2>
-                <div className="grid md:grid-cols-2 gap-4">
-                  {similarHomes.map((home) => (
-                    <div
-                      key={home.property_id}
-                      onClick={() => navigate(`/property/${home.property_id}`)}
-                      className="border rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all"
-                    >
-                      <img
-                        src={home.primary_photo?.href || home.photos?.[0]?.href || 'https://via.placeholder.com/400x300'}
-                        alt={home.location?.address?.line}
-                        className="w-full h-48 object-cover"
-                        onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                        }}
-                      />
-                      <div className="p-4">
-                        <div className="text-xl font-bold text-gray-900 mb-2">
-                          {formatPrice(home.list_price || home.price)}
-                        </div>
-                        <div className="flex gap-4 text-sm text-gray-600 mb-2">
-                          {home.description?.beds > 0 && <span>{home.description.beds} bd</span>}
-                          {home.description?.baths > 0 && <span>{home.description.baths} ba</span>}
-                          {home.description?.sqft > 0 && <span>{home.description.sqft.toLocaleString()} sqft</span>}
-                        </div>
-                        <div className="text-sm text-gray-600 truncate">
-                          {home.location?.address?.line}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Right Column - Contact Form */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl p-6 shadow-sm sticky top-24">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Contact Agent</h3>
               
-              {property.agents && property.agents[0] && (
-                <div className="mb-6 pb-6 border-b">
-                  <div className="font-semibold text-gray-900 mb-2">
-                    {property.agents[0].name || 'Real Estate Agent'}
-                  </div>
-                  {property.agents[0].phones && property.agents[0].phones[0] && (
-                    <div className="text-sm text-gray-600 flex items-center gap-2 mb-2">
-                      <Phone className="w-4 h-4" />
-                      <a 
-                        href={`tel:${property.agents[0].phones[0].number}`} 
-                        className="hover:text-red-600"
-                      >
-                        {property.agents[0].phones[0].number}
-                      </a>
-                    </div>
-                  )}
-                  {property.agents[0].email && (
-                    <div className="text-sm text-gray-600 flex items-center gap-2">
-                      <Mail className="w-4 h-4" />
-                      <a 
-                        href={`mailto:${property.agents[0].email}`} 
-                        className="hover:text-red-600"
-                      >
-                        {property.agents[0].email}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -625,7 +426,7 @@ const PropertyDetails = () => {
                   />
                 </div>
                 <button
-                  onClick={handleContactSubmit}
+                  onClick={() => alert('Thank you! An agent will contact you soon.')}
                   className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
                 >
                   Request Information
@@ -636,7 +437,6 @@ const PropertyDetails = () => {
         </div>
       </div>
 
-      {/* Fullscreen Gallery Modal */}
       {isGalleryOpen && currentPhoto && (
         <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
           <button
@@ -651,7 +451,7 @@ const PropertyDetails = () => {
             alt="Property"
             className="max-h-[90vh] max-w-[90vw] object-contain"
             onError={(e) => {
-              e.target.src = 'https://via.placeholder.com/1200x800?text=No+Image';
+              e.target.src = 'https://placehold.co/1200x800/png?text=No+Image';
             }}
           />
           

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, User, LogOut, Heart, LayoutDashboard, Settings } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Menu, X, User, LogOut, Heart, LayoutDashboard, Settings, Search } from 'lucide-react';
 import { auth } from '../../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -10,6 +10,15 @@ const Header = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if current path matches
+  const isActive = (path) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -49,10 +58,20 @@ const Header = () => {
     }
   };
 
+  // Get link classes based on active state
+  const getLinkClasses = (path) => {
+    const baseClasses = 'font-medium transition-colors';
+    if (isActive(path)) {
+      return `${baseClasses} text-blue-600`;
+    }
+    return `${baseClasses} text-gray-700 hover:text-blue-600`;
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
+          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
               <span className="text-white font-bold text-lg">RE</span>
@@ -62,28 +81,28 @@ const Header = () => {
             </span>
           </Link>
 
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link
-              to="/"
-              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-            >
+            <Link to="/" className={getLinkClasses('/')}>
               Home
             </Link>
-            <Link
-              to="/properties"
-              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+            <Link 
+              to="/properties" 
+              className={`${getLinkClasses('/properties')} flex items-center gap-1`}
             >
+              <Search className="w-4 h-4" />
               Search Properties
             </Link>
             <Link
               to="/my-properties"
-              className="text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center gap-1"
+              className={`${getLinkClasses('/my-properties')} flex items-center gap-1`}
             >
               <Heart className="w-4 h-4" />
               My Properties
             </Link>
           </nav>
 
+          {/* User Menu */}
           <div className="hidden md:flex items-center gap-3">
             {currentUser ? (
               <div className="relative" ref={dropdownRef}>
@@ -174,6 +193,7 @@ const Header = () => {
             )}
           </div>
 
+          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 text-gray-600 hover:text-gray-900"
@@ -182,26 +202,28 @@ const Header = () => {
           </button>
         </div>
 
+        {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200 animate-slideDown">
             <nav className="flex flex-col gap-3">
               <Link
                 to="/"
-                className="text-gray-700 hover:text-blue-600 font-medium py-2"
+                className={`${getLinkClasses('/')} py-2`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 Home
               </Link>
               <Link
                 to="/properties"
-                className="text-gray-700 hover:text-blue-600 font-medium py-2"
+                className={`${getLinkClasses('/properties')} py-2 flex items-center gap-2`}
                 onClick={() => setIsMenuOpen(false)}
               >
+                <Search className="w-4 h-4" />
                 Search Properties
               </Link>
               <Link
                 to="/my-properties"
-                className="text-gray-700 hover:text-blue-600 font-medium py-2 flex items-center gap-2"
+                className={`${getLinkClasses('/my-properties')} py-2 flex items-center gap-2`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 <Heart className="w-4 h-4" />
