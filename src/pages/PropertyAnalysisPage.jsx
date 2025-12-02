@@ -7,6 +7,7 @@ import { db } from '../config/firebase';
 
 // ✅ RentCast API for accurate rent estimates on analysis page
 import { getPropertyRentData } from '../services/rentcastAPI';
+import { saveProperty, isPropertySaved } from '../services/database';
 import { useAuth } from '../hooks/useAuth';
 import PropertySidebar from '../components/analysis/PropertySidebar';
 import PropertyAnalysisContent from '../components/analysis/PropertyAnalysisContent';
@@ -23,9 +24,52 @@ export default function PropertyAnalysisPage() {
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('analysis');
+  const [isSaved, setIsSaved] = useState(false);
   
   const [inputs, setInputs] = useState(null);
   const [results, setResults] = useState(null);
+
+  // Auto-save property to favorites when analysis page opens
+  const autoSaveProperty = async (propertyData) => {
+    if (!currentUser) {
+      console.log('⚠️ User not logged in, skipping auto-save');
+      return;
+    }
+
+    try {
+      // Check if already saved
+      const alreadySaved = await isPropertySaved(currentUser.uid, propertyData.property_id || propertyId);
+      
+      if (alreadySaved) {
+        console.log('✅ Property already saved to favorites');
+        setIsSaved(true);
+        return;
+      }
+
+      // Prepare property data for saving
+      const saveData = {
+        property_id: propertyData.property_id || propertyId,
+        address: propertyData.address || propertyData.location?.address?.line || '',
+        city: propertyData.city || propertyData.location?.address?.city || '',
+        state: propertyData.state || propertyData.location?.address?.state_code || '',
+        zip: propertyData.zipCode || propertyData.zip || propertyData.location?.address?.postal_code || '',
+        price: propertyData.price || propertyData.list_price || 0,
+        beds: propertyData.beds || propertyData.description?.beds || 0,
+        baths: propertyData.baths || propertyData.description?.baths || 0,
+        sqft: propertyData.sqft || propertyData.description?.sqft || 0,
+        thumbnail: propertyData.thumbnail || propertyData.primary_photo?.href || propertyData.photos?.[0]?.href || '',
+        rentEstimate: propertyData.rentEstimate || 0,
+        rentSource: propertyData.rentSource || 'estimate'
+      };
+
+      console.log('💾 Auto-saving property to favorites:', saveData.address);
+      await saveProperty(currentUser.uid, saveData);
+      setIsSaved(true);
+      console.log('✅ Property auto-saved to favorites');
+    } catch (error) {
+      console.error('❌ Error auto-saving property:', error);
+    }
+  };
 
   useEffect(() => {
     const loadPropertyData = async () => {
@@ -60,6 +104,10 @@ export default function PropertyAnalysisPage() {
         
         setProperty(propertyData);
         initializeInputs(propertyData);
+        
+        // Auto-save to favorites
+        await autoSaveProperty(propertyData);
+        
         setLoading(false);
       } else {
         fetchProperty();
@@ -67,7 +115,7 @@ export default function PropertyAnalysisPage() {
     };
     
     loadPropertyData();
-  }, [propertyId, location.state]);
+  }, [propertyId, location.state, currentUser]);
 
   const initializeInputs = (propertyData) => {
     // ✅ FIXED: Extract rent estimate from multiple possible locations
@@ -238,6 +286,9 @@ export default function PropertyAnalysisPage() {
         
         setProperty(propertyData);
         initializeInputs(propertyData);
+        
+        // Auto-save to favorites (property already exists in Firebase, just mark as saved)
+        setIsSaved(true);
       } else {
         console.warn('Property not found, redirecting...');
         navigate('/properties');
@@ -332,6 +383,7 @@ export default function PropertyAnalysisPage() {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         onBack={() => navigate('/properties')}
+        isSaved={isSaved}
       />
 
       <div className="flex-1 overflow-y-auto">

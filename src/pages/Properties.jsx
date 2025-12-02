@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import PropertiesHeader from '../components/features/PropertiesHeader';
 import PropertiesGrid from '../components/features/PropertiesGrid';
@@ -12,7 +12,9 @@ const Properties = () => {
   const location = useLocation();
   
   const [allProperties, setAllProperties] = useState([]);
+  const [displayedProperties, setDisplayedProperties] = useState([]); // Filtered by boundary
   const [currentBoundary, setCurrentBoundary] = useState(null);
+  const [hasBoundaryFilter, setHasBoundaryFilter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentLocation, setCurrentLocation] = useState('');
@@ -74,6 +76,7 @@ const Properties = () => {
       });
 
       setAllProperties(results || []);
+      setDisplayedProperties(results || []); // Initially show all
       
       const withCoords = (results || []).filter(p => p.lat && p.lon);
       console.log(`📍 ${withCoords.length} out of ${(results || []).length} properties have coordinates`);
@@ -96,6 +99,8 @@ const Properties = () => {
   // Handle new search from the search bar
   const handleNewSearch = (locationData) => {
     setCurrentBoundary(null);
+    setHasBoundaryFilter(false);
+    setDisplayedProperties([]); // Reset displayed
     lastSearchRef.current = null; // Reset to allow new search
     
     let searchUrl = '/properties';
@@ -108,7 +113,6 @@ const Properties = () => {
       searchUrl = `/properties?search=${encodeURIComponent(locationData.value)}`;
     }
 
-    // Use navigate with replace to avoid building up history
     navigate(searchUrl);
   };
 
@@ -139,22 +143,51 @@ const Properties = () => {
     }
   };
 
-  const handleBoundaryCreated = (boundary) => {
+  // Handle boundary change from map - filters properties shown in grid
+  // MUST be wrapped in useCallback to prevent infinite re-renders
+  const handleBoundaryChange = useCallback((filteredProps, hasBoundary) => {
+    console.log(`🗺️ Boundary ${hasBoundary ? 'active' : 'cleared'}: ${filteredProps.length} properties`);
+    setDisplayedProperties(filteredProps);
+    setHasBoundaryFilter(hasBoundary);
+  }, []); // Empty deps - only sets state, no external dependencies
+
+  const handleBoundaryCreated = useCallback((boundary) => {
     console.log('🎨 New boundary created:', boundary);
     setCurrentBoundary(boundary);
-  };
+  }, []);
 
-  const handleBoundaryEdited = (boundary) => {
+  const handleBoundaryEdited = useCallback((boundary) => {
     console.log('✏️ Boundary edited:', boundary);
     setCurrentBoundary(boundary);
-  };
+  }, []);
 
-  const handleBoundaryDeleted = () => {
+  const handleBoundaryDeleted = useCallback(() => {
     console.log('🗑️ Boundary deleted');
     setCurrentBoundary(null);
-  };
+    setHasBoundaryFilter(false);
+    setDisplayedProperties(allProperties); // Reset to all properties
+  }, [allProperties]);
 
-  const hasBoundary = currentBoundary !== null;
+  const hasBoundary = hasBoundaryFilter;
+
+  // Deduplicate properties for count display
+  const uniquePropertyCount = React.useMemo(() => {
+    const seen = new Set();
+    return displayedProperties.filter(p => {
+      if (!p.property_id || seen.has(p.property_id)) return false;
+      seen.add(p.property_id);
+      return true;
+    }).length;
+  }, [displayedProperties]);
+
+  const totalPropertyCount = React.useMemo(() => {
+    const seen = new Set();
+    return allProperties.filter(p => {
+      if (!p.property_id || seen.has(p.property_id)) return false;
+      seen.add(p.property_id);
+      return true;
+    }).length;
+  }, [allProperties]);
 
   // Render empty state when no search has been performed
   const renderEmptyState = () => (
@@ -250,48 +283,72 @@ const Properties = () => {
         {/* Results */}
         {!loading && !error && allProperties.length > 0 && (
           <>
-            {/* Results Header */}
-            {(viewMode === 'list' || viewMode === 'split') && currentLocation && (
-              <div className={`${viewMode === 'split' ? 'px-4 pt-4' : 'mb-6'}`}>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {/* Results Header - SINGLE location, rendered only here */}
+            {currentLocation && (
+              <div className={`${viewMode === 'split' ? 'px-4 pt-4 pb-2' : 'mb-6'}`}>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">
                   Homes for sale in {currentLocation}
                 </h1>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-gray-600">
                     <span className="font-semibold text-gray-900">
-                      {allProperties.length} {allProperties.length === 1 ? 'property' : 'properties'}
+                      {uniquePropertyCount} {uniquePropertyCount === 1 ? 'property' : 'properties'}
                     </span>
-                    {Object.keys(filters).length > 0 && (
-                      <span className="ml-2 text-blue-600 font-semibold">
-                        (with {Object.keys(filters).length} filter{Object.keys(filters).length !== 1 ? 's' : ''})
+                    {hasBoundary && (
+                      <span className="text-gray-500 ml-1">
+                        of {totalPropertyCount} total
                       </span>
                     )}
                   </p>
+                  
+                  {Object.keys(filters).length > 0 && (
+                    <span className="text-blue-600 font-medium text-sm">
+                      • {Object.keys(filters).length} filter{Object.keys(filters).length !== 1 ? 's' : ''} applied
+                    </span>
+                  )}
 
                   {hasBoundary && (
-                    <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-sm font-medium w-fit">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span>Boundary filter active</span>
-                    </div>
+                      Boundary active
+                    </span>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Properties Grid */}
+            {/* Properties Grid - Shows filtered properties when boundary exists */}
             {(viewMode === 'list' || viewMode === 'split') && (
-              <PropertiesGrid
-                properties={allProperties}
-                currentLocation={viewMode === 'split' ? currentLocation : ''}
-                filters={filters}
-                viewMode={viewMode}
-                selectedProperty={selectedProperty}
-                onPropertyHover={handlePropertyHover}
-                expandedPropertyId={expandedPropertyId}
-                onPropertyExpand={handlePropertyExpand}
-              />
+              <>
+                {/* Show empty state when boundary has no properties */}
+                {hasBoundary && displayedProperties.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4">
+                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                      <MapPin className="w-8 h-8 text-yellow-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Properties in This Area</h3>
+                    <p className="text-gray-600 text-center max-w-md mb-4">
+                      The boundary you drew doesn't contain any properties. Try drawing a larger area or clear the boundary.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Use the "Clear Boundary" button on the map to show all properties again.
+                    </p>
+                  </div>
+                ) : (
+                  <PropertiesGrid
+                    properties={displayedProperties}
+                    currentLocation="" // Empty - header is rendered above
+                    filters={filters}
+                    viewMode={viewMode}
+                    selectedProperty={selectedProperty}
+                    onPropertyHover={handlePropertyHover}
+                    expandedPropertyId={expandedPropertyId}
+                    onPropertyExpand={handlePropertyExpand}
+                  />
+                )}
+              </>
             )}
 
             {/* Map View */}
@@ -325,6 +382,7 @@ const Properties = () => {
                   properties={allProperties}
                   selectedProperty={selectedProperty}
                   onPropertyClick={handlePropertyClick}
+                  onBoundaryChange={handleBoundaryChange}
                   onBoundaryCreated={handleBoundaryCreated}
                   onBoundaryEdited={handleBoundaryEdited}
                   onBoundaryDeleted={handleBoundaryDeleted}
