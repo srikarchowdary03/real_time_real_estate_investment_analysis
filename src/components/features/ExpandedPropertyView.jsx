@@ -53,13 +53,22 @@ const ExpandedPropertyView = ({ property, onClose }) => {
   const estimateRent = (price, beds, sqft) => {
     if (!price || price <= 0) return 0;
     
-    // Base: 0.6% of property price monthly (conservative)
-    let estimate = price * 0.006;
+    // Rent-to-price ratio varies by price range (lower priced = higher ratio)
+    // This reflects real market behavior
+    let rentMultiplier;
+    if (price < 150000) rentMultiplier = 0.009;      // 0.9% for cheap properties
+    else if (price < 250000) rentMultiplier = 0.008; // 0.8%
+    else if (price < 400000) rentMultiplier = 0.007; // 0.7%
+    else if (price < 600000) rentMultiplier = 0.006; // 0.6%
+    else if (price < 1000000) rentMultiplier = 0.005; // 0.5%
+    else rentMultiplier = 0.004;                      // 0.4% for expensive
+    
+    let estimate = price * rentMultiplier;
     
     // Bedroom adjustments
-    if (beds >= 4) estimate *= 1.10;
-    else if (beds >= 3) estimate *= 1.05;
-    else if (beds <= 1) estimate *= 0.90;
+    if (beds >= 4) estimate *= 1.15;
+    else if (beds >= 3) estimate *= 1.08;
+    else if (beds <= 1) estimate *= 0.85;
     
     // Square footage adjustments
     if (sqft > 2500) estimate *= 1.08;
