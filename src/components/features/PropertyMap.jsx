@@ -13,104 +13,104 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // ===== INVESTMENT SCORE CALCULATION =====
 // Score based on actual property characteristics that vary
 const calculateInvestmentScore = (property) => {
-  const price = property.list_price || property.price || 0;
-  const beds = property.description?.beds || property.beds || 0;
-  const baths = property.description?.baths || property.baths || 0;
-  const sqft = property.description?.sqft || property.sqft || 0;
-  const lotSqft = property.description?.lot_sqft || property.lot_sqft || 0;
-  const yearBuilt = property.description?.year_built || property.year_built || 0;
-  const propertyType = property.description?.type || property.type || '';
-  
-  if (!price || price <= 0) return 50;
-  
-  let score = 50; // Base score
-  
-  // === 1. PRICE PER SQFT SCORING (Lower = Better for investment) ===
-  if (sqft > 0) {
-    const pricePerSqft = price / sqft;
-    if (pricePerSqft < 100) score += 20;        // Excellent value
-    else if (pricePerSqft < 150) score += 15;   // Great value
-    else if (pricePerSqft < 200) score += 10;   // Good value
-    else if (pricePerSqft < 250) score += 5;    // Fair value
-    else if (pricePerSqft < 300) score += 0;    // Average
-    else if (pricePerSqft < 400) score -= 5;    // Above average price
-    else if (pricePerSqft < 500) score -= 10;   // Expensive
-    else score -= 15;                            // Very expensive
-  }
-  
-  // === 2. BEDROOM VALUE SCORING (More beds per $100k = Better) ===
-  if (beds > 0 && price > 0) {
-    const bedsPerHundredK = beds / (price / 100000);
-    if (bedsPerHundredK >= 1.5) score += 15;     // Excellent bed/price ratio
-    else if (bedsPerHundredK >= 1.0) score += 10;
-    else if (bedsPerHundredK >= 0.7) score += 5;
-    else if (bedsPerHundredK >= 0.5) score += 0;
-    else if (bedsPerHundredK >= 0.3) score -= 5;
-    else score -= 10;                            // Few beds for price
-  }
-  
-  // === 3. RENT POTENTIAL SCORING (Based on realistic rent estimates) ===
-  // Rent-to-price ratio varies by price range (lower priced = higher ratio)
-  let rentMultiplier;
-  if (price < 150000) rentMultiplier = 0.009;      // 0.9% for cheap properties
-  else if (price < 250000) rentMultiplier = 0.008; // 0.8%
-  else if (price < 400000) rentMultiplier = 0.007; // 0.7%
-  else if (price < 600000) rentMultiplier = 0.006; // 0.6%
-  else if (price < 1000000) rentMultiplier = 0.005; // 0.5%
-  else rentMultiplier = 0.004;                      // 0.4% for expensive
-  
-  // Adjust for bedrooms (more beds = more rent potential)
-  if (beds >= 4) rentMultiplier *= 1.15;
-  else if (beds >= 3) rentMultiplier *= 1.08;
-  else if (beds <= 1) rentMultiplier *= 0.85;
-  
-  const estimatedRent = price * rentMultiplier;
-  const grossYield = (estimatedRent * 12 / price) * 100;
-  
-  // Score based on gross yield
-  if (grossYield >= 12) score += 15;
-  else if (grossYield >= 10) score += 10;
-  else if (grossYield >= 8) score += 5;
-  else if (grossYield >= 6) score += 0;
-  else if (grossYield >= 5) score -= 5;
-  else score -= 10;
-  
-  // === 4. PROPERTY SIZE BONUS ===
-  if (sqft >= 2500) score += 5;       // Large home - more rental appeal
-  else if (sqft >= 1800) score += 3;
-  else if (sqft < 800) score -= 5;    // Very small - limited appeal
-  
-  // === 5. MULTI-UNIT BONUS ===
-  const typeStr = propertyType.toLowerCase();
-  if (typeStr.includes('multi') || typeStr.includes('duplex') || 
-      typeStr.includes('triplex') || typeStr.includes('fourplex')) {
-    score += 15; // Multi-family is great for investment
-  } else if (typeStr.includes('townhouse') || typeStr.includes('condo')) {
-    score -= 5; // HOA fees reduce cash flow
-  }
-  
-  // === 6. AGE CONSIDERATION ===
-  const currentYear = new Date().getFullYear();
-  if (yearBuilt > 0) {
-    const age = currentYear - yearBuilt;
-    if (age <= 5) score += 5;          // New - less maintenance
-    else if (age <= 15) score += 3;    // Relatively new
-    else if (age >= 50) score -= 5;    // Old - more maintenance
-    else if (age >= 80) score -= 10;   // Very old
-  }
-  
-  // === 7. PRICE RANGE SWEET SPOT ===
-  // Mid-range properties often have best rent-to-price ratios
-  if (price >= 150000 && price <= 350000) {
-    score += 5; // Sweet spot for rentals
-  } else if (price < 100000) {
-    score += 3; // Cheap but potentially high yield
-  } else if (price > 750000) {
-    score -= 5; // Luxury - harder to cash flow
-  }
-  
-  // Clamp score between 0-100
-  return Math.max(0, Math.min(100, Math.round(score)));
+const price = property.list_price || property.price || 0;
+ const beds = property.description?.beds || property.beds || 0;
+ const baths = property.description?.baths || property.baths || 0;
+ const sqft = property.description?.sqft || property.sqft || 0;
+ const lotSqft = property.description?.lot_sqft || property.lot_sqft || 0;
+ const yearBuilt = property.description?.year_built || property.year_built || 0;
+ const propertyType = property.description?.type || property.type || '';
+ 
+ if (!price || price <= 0) return 50;
+ 
+ let score = 50; // Base score
+ 
+ // === 1. PRICE PER SQFT SCORING (Lower = Better for investment) ===
+ if (sqft > 0) {
+ const pricePerSqft = price / sqft;
+ if (pricePerSqft < 100) score += 20; // Excellent value
+ else if (pricePerSqft < 150) score += 15; // Great value
+ else if (pricePerSqft < 200) score += 10; // Good value
+ else if (pricePerSqft < 250) score += 5; // Fair value
+ else if (pricePerSqft < 300) score += 0; // Average
+ else if (pricePerSqft < 400) score -= 5; // Above average price
+ else if (pricePerSqft < 500) score -= 10; // Expensive
+ else score -= 15; // Very expensive
+ }
+ 
+ // === 2. BEDROOM VALUE SCORING (More beds per $100k = Better) ===
+ if (beds > 0 && price > 0) {
+ const bedsPerHundredK = beds / (price / 100000);
+ if (bedsPerHundredK >= 1.5) score += 15; // Excellent bed/price ratio
+ else if (bedsPerHundredK >= 1.0) score += 10;
+ else if (bedsPerHundredK >= 0.7) score += 5;
+ else if (bedsPerHundredK >= 0.5) score += 0;
+ else if (bedsPerHundredK >= 0.3) score -= 5;
+ else score -= 10; // Few beds for price
+ }
+ 
+ // === 3. RENT POTENTIAL SCORING (Based on realistic rent estimates) ===
+ // Rent-to-price ratio varies by price range (lower priced = higher ratio)
+ let rentMultiplier;
+ if (price < 150000) rentMultiplier = 0.009; // 0.9% for cheap properties
+ else if (price < 250000) rentMultiplier = 0.008; // 0.8%
+ else if (price < 400000) rentMultiplier = 0.007; // 0.7%
+ else if (price < 600000) rentMultiplier = 0.006; // 0.6%
+ else if (price < 1000000) rentMultiplier = 0.005; // 0.5%
+ else rentMultiplier = 0.004; // 0.4% for expensive
+ 
+ // Adjust for bedrooms (more beds = more rent potential)
+ if (beds >= 4) rentMultiplier *= 1.15;
+ else if (beds >= 3) rentMultiplier *= 1.08;
+ else if (beds <= 1) rentMultiplier *= 0.85;
+ 
+ const estimatedRent = price * rentMultiplier;
+ const grossYield = (estimatedRent * 12 / price) * 100;
+ 
+ // Score based on gross yield
+ if (grossYield >= 12) score += 15;
+ else if (grossYield >= 10) score += 10;
+ else if (grossYield >= 8) score += 5;
+ else if (grossYield >= 6) score += 0;
+ else if (grossYield >= 5) score -= 5;
+ else score -= 10;
+ 
+ // === 4. PROPERTY SIZE BONUS ===
+ if (sqft >= 2500) score += 5; // Large home - more rental appeal
+ else if (sqft >= 1800) score += 3;
+ else if (sqft < 800) score -= 5; // Very small - limited appeal
+ 
+ // === 5. MULTI-UNIT BONUS ===
+ const typeStr = propertyType.toLowerCase();
+ if (typeStr.includes('multi') || typeStr.includes('duplex') || 
+ typeStr.includes('triplex') || typeStr.includes('fourplex')) {
+ score += 15; // Multi-family is great for investment
+ } else if (typeStr.includes('townhouse') || typeStr.includes('condo')) {
+ score -= 5; // HOA fees reduce cash flow
+ }
+ 
+ // === 6. AGE CONSIDERATION ===
+ const currentYear = new Date().getFullYear();
+ if (yearBuilt > 0) {
+ const age = currentYear - yearBuilt;
+ if (age <= 5) score += 5; // New - less maintenance
+ else if (age <= 15) score += 3; // Relatively new
+ else if (age >= 50) score -= 5; // Old - more maintenance
+ else if (age >= 80) score -= 10; // Very old
+ }
+ 
+ // === 7. PRICE RANGE SWEET SPOT ===
+ // Mid-range properties often have best rent-to-price ratios
+ if (price >= 150000 && price <= 350000) {
+ score += 5; // Sweet spot for rentals
+ } else if (price < 100000) {
+ score += 3; // Cheap but potentially high yield
+ } else if (price > 750000) {
+ score -= 5; // Luxury - harder to cash flow
+ }
+ 
+ // Clamp score between 0-100
+ return Math.max(0, Math.min(100, Math.round(score)));
 };
 
 // ===== SCORE-BASED COLORS =====
