@@ -53,13 +53,21 @@ const PropertyCard = ({
   const estimateRent = useMemo(() => {
     if (!price || price <= 0) return 0;
     
-    // Base: 0.6% of property price monthly
-    let estimate = price * 0.006;
+    // Rent-to-price ratio varies by price range (lower priced = higher ratio)
+    let rentMultiplier;
+    if (price < 150000) rentMultiplier = 0.009;      // 0.9% for cheap properties
+    else if (price < 250000) rentMultiplier = 0.008; // 0.8%
+    else if (price < 400000) rentMultiplier = 0.007; // 0.7%
+    else if (price < 600000) rentMultiplier = 0.006; // 0.6%
+    else if (price < 1000000) rentMultiplier = 0.005; // 0.5%
+    else rentMultiplier = 0.004;                      // 0.4% for expensive
+    
+    let estimate = price * rentMultiplier;
     
     // Bedroom adjustments
-    if (beds >= 4) estimate *= 1.10;
-    else if (beds >= 3) estimate *= 1.05;
-    else if (beds <= 1) estimate *= 0.90;
+    if (beds >= 4) estimate *= 1.15;
+    else if (beds >= 3) estimate *= 1.08;
+    else if (beds <= 1) estimate *= 0.85;
     
     // Square footage adjustments
     if (sqft > 2500) estimate *= 1.08;
@@ -85,13 +93,47 @@ const PropertyCard = ({
     const annualNOI = (estimateRent * 12) * 0.65; // 35% expense ratio
     const capRate = (annualNOI / price) * 100;
 
-    // Score based on gross yield
-    let score, label, color;
-    if (grossYield >= 12) { score = 85; label = 'Excellent'; color = 'emerald'; }
-    else if (grossYield >= 10) { score = 75; label = 'Good'; color = 'green'; }
-    else if (grossYield >= 8) { score = 60; label = 'Fair'; color = 'yellow'; }
-    else if (grossYield >= 6) { score = 40; label = 'Risky'; color = 'orange'; }
-    else { score = 25; label = 'Poor'; color = 'red'; }
+    // === IMPROVED SCORE CALCULATION ===
+    let score = 50; // Base score
+    
+    // Price per sqft scoring
+    if (sqft > 0) {
+      const pricePerSqft = price / sqft;
+      if (pricePerSqft < 100) score += 15;
+      else if (pricePerSqft < 150) score += 10;
+      else if (pricePerSqft < 200) score += 5;
+      else if (pricePerSqft >= 400) score -= 10;
+      else if (pricePerSqft >= 300) score -= 5;
+    }
+    
+    // Gross yield scoring
+    if (grossYield >= 12) score += 15;
+    else if (grossYield >= 10) score += 10;
+    else if (grossYield >= 8) score += 5;
+    else if (grossYield < 5) score -= 10;
+    
+    // Bedroom value scoring
+    if (beds > 0) {
+      const bedsPerHundredK = beds / (price / 100000);
+      if (bedsPerHundredK >= 1.5) score += 10;
+      else if (bedsPerHundredK >= 1.0) score += 5;
+      else if (bedsPerHundredK < 0.3) score -= 10;
+    }
+    
+    // Price range sweet spot
+    if (price >= 150000 && price <= 350000) score += 5;
+    else if (price > 750000) score -= 5;
+    
+    // Clamp score
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    // Determine label and color based on score
+    let label, color;
+    if (score >= 80) { label = 'Excellent'; color = 'emerald'; }
+    else if (score >= 65) { label = 'Good'; color = 'green'; }
+    else if (score >= 50) { label = 'Fair'; color = 'yellow'; }
+    else if (score >= 35) { label = 'Risky'; color = 'orange'; }
+    else { label = 'Poor'; color = 'red'; }
 
     return {
       grossYield,
@@ -101,7 +143,7 @@ const PropertyCard = ({
       label,
       color
     };
-  }, [price, estimateRent]);
+  }, [price, estimateRent, beds, sqft]);
 
   // Format functions
   const formatPrice = (value) => {
