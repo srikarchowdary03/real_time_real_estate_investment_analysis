@@ -1,85 +1,78 @@
 /**
  * Investment Calculations - Buy-Rent-Hold Analysis
- * Matches Excel spreadsheet formulas exactly
+ * ================================================
+ * MATCHES THE EXCEL SPREADSHEET EXACTLY
+ * Location: src/utils/investmentCalculations.js
  */
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
 
 /**
  * Calculate monthly mortgage payment using PMT formula
- * @param {number} principal - Loan amount
- * @param {number} annualRate - Annual interest rate (percentage, e.g., 7.0 for 7%)
- * @param {number} years - Loan term in years
- * @returns {number} Monthly payment amount
  */
 function calculateMonthlyPayment(principal, annualRate, years) {
-  if (principal === 0 || annualRate === 0 || years === 0) return 0;
+  if (!principal || principal === 0) return 0;
+  if (!annualRate || annualRate === 0) return principal / (years * 12);
+  if (!years || years === 0) return 0;
   
   const monthlyRate = annualRate / 100 / 12;
   const numPayments = years * 12;
   
-  // PMT formula: [r × PV] / [1 - (1 + r)^-n]
   return (principal * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
          (Math.pow(1 + monthlyRate, numPayments) - 1);
 }
 
 /**
- * Calculate principal paid in Year 1 for amortized loan
- * @param {number} loanAmount - Initial loan amount
- * @param {number} monthlyPayment - Monthly payment amount
- * @param {number} annualRate - Annual interest rate (percentage)
- * @returns {number} Total principal paid in first 12 months
+ * Calculate total principal paid in Year 1
  */
 function calculatePrincipalPaidYear1(loanAmount, monthlyPayment, annualRate) {
-  if (loanAmount === 0 || monthlyPayment === 0) return 0;
+  if (!loanAmount || !monthlyPayment) return 0;
   
   let totalPrincipal = 0;
   let balance = loanAmount;
-  const monthlyRate = annualRate / 100 / 12;
+  const monthlyRate = (annualRate || 0) / 100 / 12;
   
   for (let month = 1; month <= 12; month++) {
     const interestPayment = balance * monthlyRate;
     const principalPayment = monthlyPayment - interestPayment;
-    totalPrincipal += principalPayment;
+    totalPrincipal += Math.max(0, principalPayment);
     balance -= principalPayment;
   }
   
   return totalPrincipal;
 }
 
-/**
- * Main Calculator Class - Buy-Rent-Hold Analysis
- */
+// =============================================================================
+// MAIN CALCULATOR CLASS
+// =============================================================================
+
 export class BuyRentHoldCalculator {
   constructor(property, inputs) {
-    this.property = property;
-    this.inputs = inputs;
+    this.property = property || {};
+    this.inputs = inputs || {};
   }
 
-  /**
-   * SECTION 1: Property Info
-   * Data from API and user inputs
-   */
+  // SECTION 1: Property Info
   getPropertyInfo() {
     return {
       address: this.property.address || '',
-      fairMarketValue: this.inputs.fairMarketValue || this.property.price || 0,
-      vacancyRate: this.inputs.vacancyRate || 5.0,
-      managementRate: this.inputs.managementRate || 10.0,
-      advertisingCost: this.inputs.advertisingCost || 100,
-      numberOfUnits: this.inputs.numberOfUnits || this.property.bedrooms || 1,
-      appreciationRate: this.inputs.appreciationRate || 3.0
+      fairMarketValue: this.inputs.fairMarketValue || this.inputs.offerPrice || this.property.price || 0,
+      vacancyRate: this.inputs.vacancyRate ?? 5.0,
+      managementRate: this.inputs.managementRate ?? 10.0,
+      advertisingCost: this.inputs.advertisingCost ?? 100,
+      numberOfUnits: this.inputs.numberOfUnits || 1,
+      appreciationRate: this.inputs.appreciationRate ?? 3.0
     };
   }
 
-  /**
-   * SECTION 2: Purchase Info
-   * All closing costs and total purchase price
-   */
+  // SECTION 2: Purchase Info → Real Purchase Price (RPP)
   calculatePurchaseInfo() {
     const {
       offerPrice = 0,
       repairs = 0,
       repairsContingency = 0,
-      purchaseCostsTotal = 0, // This will be either itemized total or percentage-based total
       lenderFee = 0,
       brokerFee = 0,
       environmentals = 0,
@@ -90,19 +83,15 @@ export class BuyRentHoldCalculator {
       legal = 0
     } = this.inputs;
 
-    // Use purchaseCostsTotal if available (from itemization), otherwise sum individual costs
-    const closingCosts = purchaseCostsTotal > 0 
-      ? purchaseCostsTotal 
-      : (lenderFee + brokerFee + environmentals + inspections + appraisals + misc + transferTax + legal);
+    const closingCosts = lenderFee + brokerFee + environmentals + inspections + 
+                         appraisals + misc + transferTax + legal;
 
-    // Real Purchase Price (RPP) = offer + closing costs + repairs
-    const realPurchasePrice = offerPrice + closingCosts + repairs + repairsContingency;
+    const realPurchasePrice = offerPrice + repairs + repairsContingency + closingCosts;
 
     return {
       offerPrice,
       repairs,
       repairsContingency,
-      purchaseCosts: closingCosts,
       lenderFee,
       brokerFee,
       environmentals,
@@ -111,26 +100,23 @@ export class BuyRentHoldCalculator {
       misc,
       transferTax,
       legal,
+      closingCosts,
       realPurchasePrice
     };
   }
 
-  /**
-   * SECTION 3: Financing (Monthly)
-   * Calculates mortgage payments for 1st, 2nd, and interest-only loans
-   */
+  // SECTION 3: Financing → Cash Required to Close
   calculateFinancing() {
     const purchase = this.calculatePurchaseInfo();
     const { offerPrice } = this.inputs;
 
-    // 1st Mortgage Calculations
-    const firstMtgLTV = this.inputs.firstMtgLTV || 80;
-    const firstMtgRate = this.inputs.firstMtgRate || 7.0;
-    const firstMtgAmortization = this.inputs.firstMtgAmortization || 30;
-    const firstMtgCMHCFee = this.inputs.firstMtgCMHCFee || 0;
+    const firstMtgLTV = this.inputs.firstMtgLTV ?? 80;
+    const firstMtgRate = this.inputs.firstMtgRate ?? 7.0;
+    const firstMtgAmortization = this.inputs.firstMtgAmortization ?? 30;
+    const firstMtgCMHCFeePercent = this.inputs.firstMtgCMHCFee ?? 0;
 
     const firstMtgPrincipalBorrowed = offerPrice * (firstMtgLTV / 100);
-    const firstMtgCMHCAmount = firstMtgPrincipalBorrowed * (firstMtgCMHCFee / 100);
+    const firstMtgCMHCAmount = firstMtgPrincipalBorrowed * (firstMtgCMHCFeePercent / 100);
     const firstMtgTotalPrincipal = firstMtgPrincipalBorrowed + firstMtgCMHCAmount;
     const firstMtgMonthlyPayment = calculateMonthlyPayment(
       firstMtgTotalPrincipal,
@@ -138,40 +124,32 @@ export class BuyRentHoldCalculator {
       firstMtgAmortization
     );
 
-    // 2nd Mortgage Calculations
     const secondMtgPrincipal = this.inputs.secondMtgPrincipal || 0;
-    const secondMtgRate = this.inputs.secondMtgRate || 12.0;
+    const secondMtgRate = this.inputs.secondMtgRate ?? 12.0;
     const secondMtgAmortization = this.inputs.secondMtgAmortization || 9999;
     const secondMtgMonthlyPayment = secondMtgPrincipal > 0
-      ? calculateMonthlyPayment(secondMtgPrincipal, secondMtgRate, secondMtgAmortization)
+      ? calculateMonthlyPayment(secondMtgPrincipal, secondMtgRate, Math.min(secondMtgAmortization, 30))
       : 0;
 
-    // Interest Only Loan Calculations
     const interestOnlyPrincipal = this.inputs.interestOnlyPrincipal || 0;
     const interestOnlyRate = this.inputs.interestOnlyRate || 0;
     const interestOnlyMonthlyPayment = interestOnlyPrincipal > 0
       ? (interestOnlyPrincipal * interestOnlyRate / 100) / 12
       : 0;
 
-    // Other Monthly Financing Costs
     const otherMonthlyFinancingCosts = this.inputs.otherMonthlyFinancingCosts || 0;
-
-    // FIXED: Cash Required to Close calculation
-    // Down payment + closing costs - NOT adding other costs
-    const downPayment = offerPrice - firstMtgPrincipalBorrowed;
-    const closingCosts = purchase.realPurchasePrice - offerPrice;
-    const cashRequiredToClose = downPayment + closingCosts;
+    const cashRequiredToClose = purchase.realPurchasePrice - firstMtgPrincipalBorrowed - secondMtgPrincipal;
 
     return {
       firstMtg: {
-        ltv: firstMtgLTV,
+        principalBorrowed: firstMtgPrincipalBorrowed,
         rate: firstMtgRate,
         amortization: firstMtgAmortization,
-        cmhcFeePercent: firstMtgCMHCFee,
-        principalBorrowed: firstMtgPrincipalBorrowed,
+        cmhcFeePercent: firstMtgCMHCFeePercent,
         cmhcAmount: firstMtgCMHCAmount,
         totalPrincipal: firstMtgTotalPrincipal,
-        monthlyPayment: firstMtgMonthlyPayment
+        monthlyPayment: firstMtgMonthlyPayment,
+        ltv: firstMtgLTV
       },
       secondMtg: {
         principal: secondMtgPrincipal,
@@ -185,16 +163,11 @@ export class BuyRentHoldCalculator {
         monthlyPayment: interestOnlyMonthlyPayment
       },
       otherMonthlyFinancingCosts,
-      downPayment,
-      closingCosts,
       cashRequiredToClose
     };
   }
 
-  /**
-   * SECTION 4: Income (Annual)
-   * Gross income and vacancy loss
-   */
+  // SECTION 4: Income Annual → Effective Gross Income
   calculateIncome() {
     const {
       grossRents = 0,
@@ -205,7 +178,6 @@ export class BuyRentHoldCalculator {
     } = this.inputs;
 
     const propertyInfo = this.getPropertyInfo();
-
     const totalIncome = grossRents + parking + storage + laundry + otherIncome;
     const vacancyLoss = totalIncome * (propertyInfo.vacancyRate / 100);
     const effectiveGrossIncome = totalIncome - vacancyLoss;
@@ -218,14 +190,12 @@ export class BuyRentHoldCalculator {
       otherIncome,
       totalIncome,
       vacancyLoss,
+      vacancyRate: propertyInfo.vacancyRate,
       effectiveGrossIncome
     };
   }
 
-  /**
-   * SECTION 5: Operating Expenses (Annual)
-   * All property operating costs - MATCHES DEALCHECK METHODOLOGY
-   */
+  // SECTION 5: Operating Expenses Annual
   calculateOperatingExpenses() {
     const income = this.calculateIncome();
     const propertyInfo = this.getPropertyInfo();
@@ -233,8 +203,7 @@ export class BuyRentHoldCalculator {
     const {
       propertyTaxes = 0,
       insurance = 0,
-      maintenancePercent = 10, // % of GROSS RENTS (DealCheck default)
-      capExPercent = 5,        // % of GROSS RENTS (DealCheck default)
+      repairsPercent = 5.0,
       electricity = 0,
       gas = 0,
       lawnMaintenance = 0,
@@ -256,38 +225,29 @@ export class BuyRentHoldCalculator {
       evictions = 0
     } = this.inputs;
 
-    // DEALCHECK METHODOLOGY:
-    // Maintenance = % of GROSS RENTS (not EGI, not total income)
-    const maintenance = income.grossRents * (maintenancePercent / 100);
-    
-    // CapEx = % of GROSS RENTS (not EGI)
-    const capEx = income.grossRents * (capExPercent / 100);
-    
-    // Management = % of OPERATING INCOME (effectiveGrossIncome = after vacancy)
-    const management = income.effectiveGrossIncome * (propertyInfo.managementRate / 100);
+    // Repairs and Management based on Gross Rents (Excel methodology)
+    const repairs = income.grossRents * (repairsPercent / 100);
+    const management = income.grossRents * (propertyInfo.managementRate / 100);
 
     const totalExpenses = 
-      propertyTaxes + insurance + maintenance + capEx + management + 
-      electricity + gas + lawnMaintenance + waterSewer + cable + 
-      caretaking + advertising + associationFees + pestControl + 
-      security + trashRemoval + miscellaneous + commonArea + 
-      capitalImprovements + accounting + legalExpenses + badDebts + 
-      otherExpenses + evictions;
+      propertyTaxes + insurance + repairs + electricity + gas + 
+      lawnMaintenance + waterSewer + cable + management + caretaking + 
+      advertising + associationFees + pestControl + security + 
+      trashRemoval + miscellaneous + commonArea + capitalImprovements + 
+      accounting + legalExpenses + badDebts + otherExpenses + evictions;
 
     return {
       propertyTaxes,
       insurance,
-      maintenance,
-      maintenancePercent,
-      capEx,
-      capExPercent,
-      management,
-      managementPercent: propertyInfo.managementRate,
+      repairs,
+      repairsPercent,
       electricity,
       gas,
       lawnMaintenance,
       waterSewer,
       cable,
+      management,
+      managementPercent: propertyInfo.managementRate,
       caretaking,
       advertising,
       associationFees,
@@ -298,36 +258,32 @@ export class BuyRentHoldCalculator {
       commonArea,
       capitalImprovements,
       accounting,
-      legal: legalExpenses,
+      legalExpenses,
       badDebts,
-      other: otherExpenses,
+      otherExpenses,
       evictions,
       totalExpenses
     };
   }
 
-  /**
-   * SECTION 6: Net Operating Income (Annual)
-   * NOI = Effective Gross Income - Operating Expenses
-   */
+  // SECTION 6: Net Operating Income
   calculateNOI() {
     const income = this.calculateIncome();
     const expenses = this.calculateOperatingExpenses();
-    return income.effectiveGrossIncome - expenses.totalExpenses;
+    const netOperatingIncome = income.effectiveGrossIncome - expenses.totalExpenses;
+    
+    return {
+      effectiveGrossIncome: income.effectiveGrossIncome,
+      totalExpenses: expenses.totalExpenses,
+      netOperatingIncome
+    };
   }
 
-  /**
-   * SECTION 7: Cash Requirements
-   * Total cash needed to close the deal
-   */
+  // SECTION 7: Cash Requirements
   calculateCashRequirements() {
     const financing = this.calculateFinancing();
-    const {
-      deposits = 0,
-      lessProRation = 0
-    } = this.inputs;
-
-    const totalCashRequired = financing.cashRequiredToClose;
+    const { deposits = 0, lessProRation = 0 } = this.inputs;
+    const totalCashRequired = financing.cashRequiredToClose + deposits - lessProRation;
 
     return {
       deposits,
@@ -337,18 +293,14 @@ export class BuyRentHoldCalculator {
     };
   }
 
-  /**
-   * SECTION 8: Cashflow Summary (Annual)
-   * Complete cash flow analysis
-   */
+  // SECTION 8: Cashflow Summary Annual
   calculateCashflowSummary() {
     const income = this.calculateIncome();
     const expenses = this.calculateOperatingExpenses();
-    const noi = this.calculateNOI();
+    const noiResult = this.calculateNOI();
     const financing = this.calculateFinancing();
     const propertyInfo = this.getPropertyInfo();
 
-    // Annual debt service = monthly payments × 12
     const annualDebtService = (
       financing.firstMtg.monthlyPayment + 
       financing.secondMtg.monthlyPayment + 
@@ -356,14 +308,16 @@ export class BuyRentHoldCalculator {
       financing.otherMonthlyFinancingCosts
     ) * 12;
 
-    const annualProfitOrLoss = noi - annualDebtService;
+    const annualProfitOrLoss = noiResult.netOperatingIncome - annualDebtService;
     const totalMonthlyProfitOrLoss = annualProfitOrLoss / 12;
-    const cashflowPerUnitPerMonth = totalMonthlyProfitOrLoss / propertyInfo.numberOfUnits;
+    const cashflowPerUnitPerMonth = propertyInfo.numberOfUnits > 0 
+      ? totalMonthlyProfitOrLoss / propertyInfo.numberOfUnits 
+      : 0;
 
     return {
       effectiveGrossIncome: income.effectiveGrossIncome,
       operatingExpenses: expenses.totalExpenses,
-      netOperatingIncome: noi,
+      netOperatingIncome: noiResult.netOperatingIncome,
       debtServicingCosts: annualDebtService,
       annualProfitOrLoss,
       totalMonthlyProfitOrLoss,
@@ -371,53 +325,40 @@ export class BuyRentHoldCalculator {
     };
   }
 
-  /**
-   * SECTION 9: Quick Analysis
-   * Key investment metrics and ratios
-   */
+  // SECTION 9: Quick Analysis - All Ratios
   calculateQuickAnalysis() {
+    const propertyInfo = this.getPropertyInfo();
     const purchase = this.calculatePurchaseInfo();
     const financing = this.calculateFinancing();
     const income = this.calculateIncome();
     const expenses = this.calculateOperatingExpenses();
-    const noi = this.calculateNOI();
+    const noiResult = this.calculateNOI();
     const cashflow = this.calculateCashflowSummary();
     const cashReq = this.calculateCashRequirements();
-    const propertyInfo = this.getPropertyInfo();
 
-    // LTV and LTPP ratios
-    const firstMtgLTV = (financing.firstMtg.principalBorrowed / propertyInfo.fairMarketValue) * 100;
-    const firstMtgLTPP = (financing.firstMtg.principalBorrowed / purchase.realPurchasePrice) * 100;
-    const secondMtgLTV = (financing.secondMtg.principal / propertyInfo.fairMarketValue) * 100;
-    const secondMtgLTPP = (financing.secondMtg.principal / purchase.realPurchasePrice) * 100;
+    const firstMtgLTV = propertyInfo.fairMarketValue > 0 
+      ? (financing.firstMtg.principalBorrowed / propertyInfo.fairMarketValue) * 100 : 0;
+    const firstMtgLTPP = purchase.offerPrice > 0 
+      ? (financing.firstMtg.principalBorrowed / purchase.offerPrice) * 100 : 0;
+    const secondMtgLTV = propertyInfo.fairMarketValue > 0 
+      ? (financing.secondMtg.principal / propertyInfo.fairMarketValue) * 100 : 0;
+    const secondMtgLTPP = purchase.offerPrice > 0 
+      ? (financing.secondMtg.principal / purchase.offerPrice) * 100 : 0;
 
-    // Cap Rates
-    const capRateOnPP = purchase.realPurchasePrice > 0 
-      ? (noi / purchase.realPurchasePrice) * 100 
-      : 0;
+    const capRateOnPP = purchase.offerPrice > 0 
+      ? (noiResult.netOperatingIncome / purchase.offerPrice) * 100 : 0;
     const capRateOnFMV = propertyInfo.fairMarketValue > 0 
-      ? (noi / propertyInfo.fairMarketValue) * 100 
-      : 0;
+      ? (noiResult.netOperatingIncome / propertyInfo.fairMarketValue) * 100 : 0;
 
-    // Rent metrics
     const averageRent = propertyInfo.numberOfUnits > 0 
-      ? income.grossRents / propertyInfo.numberOfUnits / 12 
-      : 0;
-
-    // Financial ratios
+      ? income.grossRents / propertyInfo.numberOfUnits / 12 : 0;
     const grm = income.grossRents > 0 
-      ? purchase.realPurchasePrice / income.grossRents 
-      : 0;
+      ? purchase.offerPrice / income.grossRents : 0;
     const dcr = cashflow.debtServicingCosts > 0 
-      ? noi / cashflow.debtServicingCosts 
-      : 0;
-
-    // ROI Calculations
+      ? noiResult.netOperatingIncome / cashflow.debtServicingCosts : 0;
     const cashOnCashROI = cashReq.totalCashRequired > 0 
-      ? (cashflow.annualProfitOrLoss / cashReq.totalCashRequired) * 100 
-      : 0;
+      ? (cashflow.annualProfitOrLoss / cashReq.totalCashRequired) * 100 : 0;
 
-    // Calculate principal paid in Year 1
     const firstMtgPrincipalYear1 = calculatePrincipalPaidYear1(
       financing.firstMtg.totalPrincipal,
       financing.firstMtg.monthlyPayment,
@@ -428,27 +369,19 @@ export class BuyRentHoldCalculator {
           financing.secondMtg.principal,
           financing.secondMtg.monthlyPayment,
           financing.secondMtg.rate
-        )
-      : 0;
+        ) : 0;
     const totalPrincipalYear1 = firstMtgPrincipalYear1 + secondMtgPrincipalYear1;
 
     const equityROI = cashReq.totalCashRequired > 0 
-      ? (totalPrincipalYear1 / cashReq.totalCashRequired) * 100 
-      : 0;
-
+      ? (totalPrincipalYear1 / cashReq.totalCashRequired) * 100 : 0;
+    const appreciationValue = propertyInfo.fairMarketValue * (propertyInfo.appreciationRate / 100);
     const appreciationROI = cashReq.totalCashRequired > 0 
-      ? ((propertyInfo.fairMarketValue * propertyInfo.appreciationRate / 100) / cashReq.totalCashRequired) * 100 
-      : 0;
-
+      ? (appreciationValue / cashReq.totalCashRequired) * 100 : 0;
     const totalROI = cashOnCashROI + equityROI + appreciationROI;
-
     const forcedAppROI = cashReq.totalCashRequired > 0 
-      ? ((propertyInfo.fairMarketValue - purchase.realPurchasePrice) / cashReq.totalCashRequired) * 100 
-      : 0;
-
-    const expenseToIncomeRatio = income.effectiveGrossIncome > 0 
-      ? (expenses.totalExpenses / income.effectiveGrossIncome) * 100 
-      : 0;
+      ? ((propertyInfo.fairMarketValue - purchase.realPurchasePrice) / cashReq.totalCashRequired) * 100 : 0;
+    const expenseToIncomeRatio = income.totalIncome > 0 
+      ? (expenses.totalExpenses / income.totalIncome) * 100 : 0;
 
     return {
       firstMtgLTV,
@@ -466,97 +399,165 @@ export class BuyRentHoldCalculator {
       totalROI,
       forcedAppROI,
       expenseToIncomeRatio,
-      principalPaidYear1: totalPrincipalYear1
+      principalPaidYear1: totalPrincipalYear1,
+      appreciationValue
     };
   }
 
-  /**
-   * Get complete analysis with all sections
-   */
-  getCompleteAnalysis() {
-    const propertyInfo = this.getPropertyInfo();
-    const purchase = this.calculatePurchaseInfo();
-    const financing = this.calculateFinancing();
-    const income = this.calculateIncome();
-    const expenses = this.calculateOperatingExpenses();
-    const noi = this.calculateNOI();
-    const cashRequirements = this.calculateCashRequirements();
+  // Investment Score Calculation
+  calculateInvestmentScore() {
+    const qa = this.calculateQuickAnalysis();
     const cashflow = this.calculateCashflowSummary();
-    const quickAnalysis = this.calculateQuickAnalysis();
+    
+    let score = 0;
 
+    // Cash on Cash ROI (25 points)
+    if (qa.cashOnCashROI >= 12) score += 25;
+    else if (qa.cashOnCashROI >= 8) score += 20;
+    else if (qa.cashOnCashROI >= 5) score += 15;
+    else if (qa.cashOnCashROI >= 0) score += 10;
+    else if (qa.cashOnCashROI >= -5) score += 5;
+
+    // Cap Rate (20 points)
+    if (qa.capRateOnPP >= 10) score += 20;
+    else if (qa.capRateOnPP >= 8) score += 17;
+    else if (qa.capRateOnPP >= 6) score += 14;
+    else if (qa.capRateOnPP >= 5) score += 10;
+    else if (qa.capRateOnPP >= 4) score += 7;
+    else score += 3;
+
+    // DCR (20 points)
+    if (qa.dcr >= 1.5) score += 20;
+    else if (qa.dcr >= 1.25) score += 16;
+    else if (qa.dcr >= 1.1) score += 12;
+    else if (qa.dcr >= 1.0) score += 8;
+    else if (qa.dcr >= 0.9) score += 4;
+
+    // Monthly Cash Flow (20 points)
+    const monthlyCF = cashflow.totalMonthlyProfitOrLoss;
+    if (monthlyCF >= 500) score += 20;
+    else if (monthlyCF >= 300) score += 16;
+    else if (monthlyCF >= 100) score += 12;
+    else if (monthlyCF >= 0) score += 8;
+    else if (monthlyCF >= -200) score += 4;
+
+    // Total ROI (15 points)
+    if (qa.totalROI >= 20) score += 15;
+    else if (qa.totalROI >= 15) score += 12;
+    else if (qa.totalROI >= 10) score += 9;
+    else if (qa.totalROI >= 5) score += 6;
+    else if (qa.totalROI >= 0) score += 3;
+
+    let badge, description;
+    if (score >= 85) {
+      badge = 'excellent';
+      description = 'Outstanding investment - Strong across all metrics';
+    } else if (score >= 70) {
+      badge = 'good';
+      description = 'Good investment - Solid returns expected';
+    } else if (score >= 50) {
+      badge = 'fair';
+      description = 'Fair investment - Average returns';
+    } else if (score >= 30) {
+      badge = 'risky';
+      description = 'Risky investment - Below average metrics';
+    } else {
+      badge = 'avoid';
+      description = 'Poor investment - Negative cash flow likely';
+    }
+
+    return { score, maxScore: 100, badge, description };
+  }
+
+  // Get Complete Analysis
+  getCompleteAnalysis() {
     return {
-      propertyInfo,
-      purchase,
-      financing,
-      income,
-      expenses,
-      noi,
-      cashRequirements,
-      cashflow,
-      quickAnalysis
+      propertyInfo: this.getPropertyInfo(),
+      purchase: this.calculatePurchaseInfo(),
+      financing: this.calculateFinancing(),
+      income: this.calculateIncome(),
+      expenses: this.calculateOperatingExpenses(),
+      noi: this.calculateNOI(),
+      cashRequirements: this.calculateCashRequirements(),
+      cashflow: this.calculateCashflowSummary(),
+      quickAnalysis: this.calculateQuickAnalysis(),
+      investmentScore: this.calculateInvestmentScore()
     };
   }
 }
 
-/**
- * Quick Score Calculator (for property cards)
- * Simplified version for quick property evaluation
- */
-export function calculateQuickScore(price, zillowData, mortgageRates = null) {
-  // Use default values if data not available
-  const monthlyRent = zillowData?.rent || price * 0.01; // 1% rule fallback
-  const propertyTax = zillowData?.taxData?.annualAmount || price * 0.012; // 1.2% fallback
-  const insurance = zillowData?.insurance?.annual || 1200;
-  const interestRate = mortgageRates?.rate30yr || 7.0;
-
-  // Simple calculations
-  const downPayment = price * 0.20; // 20% down
-  const loanAmount = price * 0.80;
-  const monthlyMortgage = calculateMonthlyPayment(loanAmount, interestRate, 30);
-  
-  const monthlyTax = propertyTax / 12;
-  const monthlyInsurance = insurance / 12;
-  const monthlyExpenses = (monthlyRent * 0.50); // 50% rule
-  
-  const totalMonthlyExpenses = monthlyMortgage + monthlyTax + monthlyInsurance + monthlyExpenses;
-  const monthlyCashFlow = monthlyRent - totalMonthlyExpenses;
-  const annualCashFlow = monthlyCashFlow * 12;
-  
-  const annualNOI = (monthlyRent * 12) - (monthlyExpenses * 12);
-  const capRate = (annualNOI / price) * 100;
-  const cocReturn = (annualCashFlow / downPayment) * 100;
-  
-  const onePercentTarget = price * 0.01;
-  const passesOnePercent = monthlyRent >= onePercentTarget;
-
-  // Scoring
-  let score = 'poor';
-  let scoreReason = 'Negative cash flow or poor returns';
-  
-  if (monthlyCashFlow > 0 && capRate >= 8 && cocReturn >= 10) {
-    score = 'good';
-    scoreReason = 'Strong cash flow and returns';
-  } else if (monthlyCashFlow > 0 && (capRate >= 6 || cocReturn >= 8)) {
-    score = 'okay';
-    scoreReason = 'Moderate cash flow and returns';
+// Quick Score for Property Cards
+export function calculateQuickScore(price, rentEstimate, propertyData = {}) {
+  if (!price || !rentEstimate) {
+    return { score: 0, badge: 'insufficient-data', monthlyCashFlow: null, capRate: null };
   }
+
+  const downPayment = price * 0.20;
+  const loanAmount = price * 0.80;
+  const monthlyMortgage = calculateMonthlyPayment(loanAmount, 7.0, 30);
+  
+  const annualRent = rentEstimate * 12;
+  const vacancyLoss = annualRent * 0.05;
+  const effectiveIncome = annualRent - vacancyLoss;
+  
+  const propertyTax = price * 0.012;
+  const insurance = price * 0.005;
+  const repairs = annualRent * 0.05;
+  const management = annualRent * 0.10;
+  const totalExpenses = propertyTax + insurance + repairs + management;
+  
+  const noi = effectiveIncome - totalExpenses;
+  const annualDebtService = monthlyMortgage * 12;
+  const annualCashFlow = noi - annualDebtService;
+  const monthlyCashFlow = annualCashFlow / 12;
+  
+  const capRate = (noi / price) * 100;
+  const totalCashRequired = downPayment + (price * 0.03);
+  const cashOnCashROI = (annualCashFlow / totalCashRequired) * 100;
+  const dcr = annualDebtService > 0 ? noi / annualDebtService : 0;
+  
+  let score = 0;
+  if (cashOnCashROI >= 12) score += 25;
+  else if (cashOnCashROI >= 8) score += 20;
+  else if (cashOnCashROI >= 5) score += 15;
+  else if (cashOnCashROI >= 0) score += 10;
+  else score += 5;
+  
+  if (capRate >= 8) score += 20;
+  else if (capRate >= 6) score += 15;
+  else if (capRate >= 5) score += 12;
+  else score += 8;
+  
+  if (dcr >= 1.25) score += 20;
+  else if (dcr >= 1.1) score += 15;
+  else if (dcr >= 1.0) score += 10;
+  else score += 5;
+  
+  if (monthlyCashFlow >= 300) score += 20;
+  else if (monthlyCashFlow >= 100) score += 15;
+  else if (monthlyCashFlow >= 0) score += 10;
+  else score += 5;
+  
+  score += 10;
+  
+  let badge;
+  if (score >= 70) badge = 'excellent';
+  else if (score >= 55) badge = 'good';
+  else if (score >= 40) badge = 'fair';
+  else if (score >= 25) badge = 'risky';
+  else badge = 'avoid';
 
   return {
     score,
-    scoreReason,
-    monthlyCashFlow,
-    annualCashFlow,
-    capRate,
-    cocReturn,
-    monthlyRent,
-    monthlyExpenses: totalMonthlyExpenses,
-    monthlyMortgage,
-    onePercentTarget,
-    passesOnePercent,
-    dataSource: {
-      rent: !!zillowData?.rent,
-      tax: !!zillowData?.taxData?.annualAmount,
-      insurance: !!zillowData?.insurance?.annual
-    }
+    badge,
+    monthlyCashFlow: Math.round(monthlyCashFlow),
+    annualCashFlow: Math.round(annualCashFlow),
+    capRate: Math.round(capRate * 100) / 100,
+    cashOnCashROI: Math.round(cashOnCashROI * 100) / 100,
+    dcr: Math.round(dcr * 100) / 100,
+    noi: Math.round(noi),
+    totalCashRequired: Math.round(totalCashRequired)
   };
 }
+
+export default { BuyRentHoldCalculator, calculateQuickScore };

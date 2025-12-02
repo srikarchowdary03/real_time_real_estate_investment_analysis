@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Edit } from 'lucide-react';
+
+// ✅ CORRECT PATH: investmentCalculations is in src/utils/
 import { BuyRentHoldCalculator } from '../../utils/investmentCalculations';
+
+// ✅ CORRECT PATHS: All section components are in ./sections/ subfolder
 import PurchaseRehabSection from './sections/PurchaseRehabSection';
 import FinancingSection from './sections/FinancingSection';
 import ValuationSection from './sections/ValuationSection';
@@ -11,7 +15,7 @@ import PurchaseCriteriaSection from './sections/PurchaseCriteriaSection';
 
 export default function PropertyAnalysisContent({ property, inputs, onInputChange, onSave, onResultsChange }) {
   const [results, setResults] = useState(null);
-  const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'yearly'
+  const [viewMode, setViewMode] = useState('monthly');
 
   // Calculate whenever inputs change
   useEffect(() => {
@@ -22,13 +26,14 @@ export default function PropertyAnalysisContent({ property, inputs, onInputChang
       if (onResultsChange) {
         onResultsChange(analysis);
       }
-      console.log('Analysis Results:', analysis);
+      console.log('📊 Analysis Results:', analysis);
     } catch (error) {
-      console.error('Calculation error:', error);
+      console.error('❌ Calculation error:', error);
     }
   }, [inputs, property]);
 
   const formatCurrency = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '$0';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -38,6 +43,7 @@ export default function PropertyAnalysisContent({ property, inputs, onInputChang
   };
 
   const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
 
@@ -78,25 +84,25 @@ export default function PropertyAnalysisContent({ property, inputs, onInputChang
         <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
           <div className="text-sm text-gray-600 mb-1">CASH NEEDED</div>
           <div className="text-2xl font-bold text-blue-600">
-            {formatCurrency(results.cashRequirements.totalCashRequired)}
+            {formatCurrency(results?.cashRequirements?.totalCashRequired ?? 0)}
           </div>
         </div>
         <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
           <div className="text-sm text-gray-600 mb-1">CASH FLOW</div>
-          <div className="text-2xl font-bold text-green-600">
-            {formatCurrency(results.cashflow.totalMonthlyProfitOrLoss)}/mo
+          <div className={`text-2xl font-bold ${(results?.cashflow?.totalMonthlyProfitOrLoss ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(results?.cashflow?.totalMonthlyProfitOrLoss ?? 0)}/mo
           </div>
         </div>
         <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
           <div className="text-sm text-gray-600 mb-1">CAP RATE</div>
           <div className="text-2xl font-bold text-purple-600">
-            {formatPercent(results.quickAnalysis.capRateOnPP)}
+            {formatPercent(results?.quickAnalysis?.capRateOnPP ?? 0)}
           </div>
         </div>
         <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
-          <div className="text-sm text-gray-600 mb-1">COC</div>
-          <div className="text-2xl font-bold text-orange-600">
-            {formatPercent(results.quickAnalysis.cashOnCashROI)}
+          <div className="text-sm text-gray-600 mb-1">COC ROI</div>
+          <div className={`text-2xl font-bold ${(results?.quickAnalysis?.cashOnCashROI ?? 0) >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+            {formatPercent(results?.quickAnalysis?.cashOnCashROI ?? 0)}
           </div>
         </div>
       </div>

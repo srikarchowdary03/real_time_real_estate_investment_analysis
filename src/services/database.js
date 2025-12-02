@@ -11,10 +11,15 @@ import {
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
+
+// ✅ Use your ORIGINAL import path
 import { db } from '../config/firebase';
 
 const COLLECTION_NAME = 'savedProperties';
 
+/**
+ * Save a property to user's favorites
+ */
 export const saveProperty = async (userId, propertyData, zillowData = {}, quickMetrics = {}) => {
   try {
     console.log('🔵 saveProperty called');
@@ -27,40 +32,65 @@ export const saveProperty = async (userId, propertyData, zillowData = {}, quickM
     const docId = `${userId}_${propertyData.property_id}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
 
+    // Handle both raw API data (location.address) and normalized data (flat)
+    const extractAddress = () => {
+      if (propertyData.location?.address?.line) return propertyData.location.address.line;
+      return propertyData.address || '';
+    };
+
+    const extractCity = () => {
+      if (propertyData.location?.address?.city) return propertyData.location.address.city;
+      return propertyData.city || '';
+    };
+
+    const extractState = () => {
+      if (propertyData.location?.address?.state_code) return propertyData.location.address.state_code;
+      return propertyData.state || '';
+    };
+
+    const extractZip = () => {
+      if (propertyData.location?.address?.postal_code) return propertyData.location.address.postal_code;
+      return propertyData.zipCode || propertyData.zip || '';
+    };
+
+    const extractPrice = () => propertyData.list_price || propertyData.price || 0;
+    const extractBeds = () => propertyData.description?.beds || propertyData.beds || 0;
+    const extractBaths = () => propertyData.description?.baths || propertyData.baths || 0;
+    const extractSqft = () => propertyData.description?.sqft || propertyData.sqft || 0;
+
+    const extractRentEstimate = () => {
+      return zillowData?.rentEstimate || 
+             zillowData?.rent || 
+             propertyData.rentEstimate ||
+             propertyData.enrichedData?.rentEstimate ||
+             null;
+    };
+
     const savedPropertyData = {
-      userId: userId,
+      userId,
       propertyId: propertyData.property_id,
       
       propertyData: {
-        address: propertyData.location?.address?.line || '',
-        city: propertyData.location?.address?.city || '',
-        state: propertyData.location?.address?.state_code || '',
-        zipCode: propertyData.location?.address?.postal_code || '',
-        price: propertyData.list_price || 0,
-        beds: propertyData.description?.beds || 0,
-        baths: propertyData.description?.baths || 0,
-        sqft: propertyData.description?.sqft || 0,
-        propertyType: propertyData.description?.type || '',
-        yearBuilt: propertyData.description?.year_built || null,
-        lotSize: propertyData.description?.lot_sqft || null,
-        photos: propertyData.photos || [],
-        primaryPhoto: propertyData.primary_photo?.href || null,
+        address: extractAddress(),
+        city: extractCity(),
+        state: extractState(),
+        zipCode: extractZip(),
+        price: extractPrice(),
+        beds: extractBeds(),
+        baths: extractBaths(),
+        sqft: extractSqft(),
       },
 
-      rentEstimate: zillowData.rent || null,
-      rentRangeLow: zillowData.rentRangeLow || null,
-      rentRangeHigh: zillowData.rentRangeHigh || null,
-      photos: zillowData.photos || [],
-      taxAssessment: zillowData.taxAssessment || null,
-      annualTaxAmount: zillowData.annualTaxAmount || null,
+      rentEstimate: extractRentEstimate(),
+      rentRangeLow: zillowData?.rentRangeLow || null,
+      rentRangeHigh: zillowData?.rentRangeHigh || null,
+      photos: zillowData?.photos || propertyData.photos || [],
+      annualTaxAmount: zillowData?.annualTaxAmount || zillowData?.taxData?.annualAmount || null,
 
-      quickScore: quickMetrics?.score || null,
+      quickScore: quickMetrics?.score || quickMetrics?.investmentScore || null,
       estimatedCashFlow: quickMetrics?.monthlyCashFlow || null,
       estimatedCapRate: quickMetrics?.capRate || null,
-      estimatedROI: quickMetrics?.cocReturn || null,
-
-      userInputs: null,
-      fullCalculations: null,
+      investmentBadge: zillowData?.investmentBadge || quickMetrics?.badge || null,
 
       notes: '',
       tags: [],
@@ -125,9 +155,40 @@ export const getSavedProperties = async (userId) => {
   }
 };
 
+export const updateSavedProperty = async (userId, propertyId, updates) => {
+  try {
+    if (!userId || !propertyId) throw new Error('User ID and Property ID required');
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    await updateDoc(docRef, { ...updates, updatedAt: serverTimestamp() });
+    console.log('✅ Property updated:', docId);
+  } catch (error) {
+    console.error('❌ Update error:', error);
+    throw error;
+  }
+};
+
+export const getSavedProperty = async (userId, propertyId) => {
+  try {
+    if (!userId || !propertyId) return null;
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ Get property error:', error);
+    return null;
+  }
+};
+
 export default {
   saveProperty,
   isPropertySaved,
   unsaveProperty,
-  getSavedProperties
+  getSavedProperties,
+  updateSavedProperty,
+  getSavedProperty
 };

@@ -1,10 +1,23 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Calculator, TrendingUp, Home as HomeIcon } from 'lucide-react';
+import { Search, Calculator, TrendingUp, Home as HomeIcon, Building2, MapPin, DollarSign } from 'lucide-react';
 import PropertySearchBar from '../components/common/PropertySearchBar';
 
 const Home = () => {
   const navigate = useNavigate();
+
+  const popularLocations = [
+    { label: 'Boston, MA', city: 'Boston', state: 'MA' },
+    { label: 'Los Angeles, CA', city: 'Los Angeles', state: 'CA' },
+    { label: 'Miami, FL', city: 'Miami', state: 'FL' },
+    { label: 'Austin, TX', city: 'Austin', state: 'TX' },
+    { label: 'Denver, CO', city: 'Denver', state: 'CO' },
+    { label: 'Seattle, WA', city: 'Seattle', state: 'WA' },
+  ];
+
+  const handlePopularLocationClick = (location) => {
+    navigate(`/properties?city=${encodeURIComponent(location.city)}&state=${location.state}`);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -21,37 +34,33 @@ const Home = () => {
               Search, analyze, and compare real estate investments with powerful tools
             </p>
 
+            {/* Search Bar with Autocomplete */}
             <div className="max-w-3xl mx-auto mb-8">
               <PropertySearchBar 
                 size="large"
                 placeholder="Enter an address, neighborhood, city, or ZIP code"
+                autoFocus={false}
               />
             </div>
 
+            {/* Popular Locations */}
             <div className="flex justify-center gap-3 mb-10 flex-wrap">
-              <span className="text-sm text-gray-500">Popular:</span>
-              {[
-                { label: 'Boston, MA', zip: '02134' },
-                { label: 'Los Angeles', zip: '90004' },
-                { label: 'Miami Beach', zip: '33139' },
-                { label: 'Austin, TX', city: 'Austin', state: 'TX' }
-              ].map((location, index) => (
+              <span className="text-sm text-gray-500 flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                Popular:
+              </span>
+              {popularLocations.map((location, index) => (
                 <button
                   key={index}
-                  onClick={() => {
-                    if (location.zip) {
-                      navigate(`/properties?zip=${location.zip}`);
-                    } else if (location.city && location.state) {
-                      navigate(`/properties?city=${location.city}&state=${location.state}`);
-                    }
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors"
+                  onClick={() => handlePopularLocationClick(location)}
+                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors px-2 py-1 rounded hover:bg-blue-50"
                 >
                   {location.label}
                 </button>
               ))}
             </div>
 
+            {/* Stats */}
             <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-8">
               <div className="text-center">
                 <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-1">
@@ -123,6 +132,67 @@ const Home = () => {
               <p className="text-gray-600 leading-relaxed">
                 Save properties and monitor your portfolio with detailed analytics and insights
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Features Section */}
+      <div className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+              Everything you need for smart investing
+            </h2>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="flex items-start gap-4 p-6 bg-white rounded-xl border border-gray-200">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">Cash Flow Analysis</h3>
+                  <p className="text-sm text-gray-600">
+                    Calculate monthly cash flow, NOI, and all expenses with precision
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-6 bg-white rounded-xl border border-gray-200">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">ROI Projections</h3>
+                  <p className="text-sm text-gray-600">
+                    5-year and 10-year investment returns with appreciation modeling
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-6 bg-white rounded-xl border border-gray-200">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">Rent Estimates</h3>
+                  <p className="text-sm text-gray-600">
+                    Accurate rental income estimates powered by market data
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-6 bg-white rounded-xl border border-gray-200">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Calculator className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">Mortgage Calculator</h3>
+                  <p className="text-sm text-gray-600">
+                    Compare loan scenarios with different down payments and rates
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
