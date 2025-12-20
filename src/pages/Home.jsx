@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Calculator, TrendingUp, Home as HomeIcon, Building2, MapPin, DollarSign } from 'lucide-react';
-import PropertySearchBar from '../components/common/PropertySearchBar';
+import PropertySearchBar from '../components/features/PropertySearchBar';
 
 const Home = () => {
   const navigate = useNavigate();

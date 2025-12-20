@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home as HomeIcon } from 'lucide-react';
-import PropertySearchBar from '../common/PropertySearchBar';
+import PropertySearchBar from './PropertySearchBar';
 import PropertyFilters from '../features/PropertyFilters';
 import ViewModeDropdown from '../features/ViewModeDropdown';
 

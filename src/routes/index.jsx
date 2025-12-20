@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 
 // Main Pages
 import Home from '../pages/Home';
+import About from '../pages/About';
 import Properties from '../pages/Properties';
 import MyProperties from '../pages/MyProperties';
 import PropertyDetails from '../pages/PropertyDetails';
@@ -53,6 +54,10 @@ const router = createBrowserRouter([
       {
         path: 'property/:id',
         element: <PropertyDetails />,
+      },
+      {
+        path: 'about',
+        element: <About />,
       },
       
       // Investment Analysis Page (DealCheck-style with sidebar)
