@@ -9,7 +9,7 @@ const SimpleLineChart = ({ data, title }) => {
   const allValues = datasets.flatMap(ds => ds.data);
   const maxValue = Math.max(...allValues);
   const minValue = Math.min(...allValues, 0);
-  const range = maxValue - minValue;
+  const range = maxValue - minValue || 1;
   
   const width = 800;
   const height = 300;
@@ -119,6 +119,7 @@ export default function BuyHoldProjections({ property, inputs, results }) {
   const [selectedYears] = useState([1, 2, 3, 5, 10, 20, 30]);
 
   const formatCurrency = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '$0';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -128,8 +129,21 @@ export default function BuyHoldProjections({ property, inputs, results }) {
   };
 
   const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
+
+  // Safety check for results
+  if (!results || !results.propertyInfo || !results.financing) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Projections...</h2>
+          <p className="text-gray-500">Please wait while we calculate your investment projections.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate projections for 30 years
   const calculateProjections = () => {
@@ -138,27 +152,26 @@ export default function BuyHoldProjections({ property, inputs, results }) {
     const incomeGrowthRate = (inputs.incomeGrowthRate || 2) / 100;
     const expenseGrowthRate = (inputs.expenseGrowthRate || 2) / 100;
 
-    let propertyValue = results.propertyInfo.fairMarketValue;
-    let loanBalance = results.financing.firstMtg.totalPrincipal;
+    let propertyValue = results.propertyInfo.fairMarketValue || inputs.offerPrice || 0;
+    let loanBalance = results.financing?.firstMtg?.totalPrincipal || 0;
     
-    const monthlyPayment = results.financing.firstMtg.monthlyPayment;
-    const monthlyRate = results.financing.firstMtg.rate / 100 / 12;
-    const annualRate = results.financing.firstMtg.rate / 100;
+    const monthlyPayment = results.financing?.firstMtg?.monthlyPayment || 0;
+    const monthlyRate = (results.financing?.firstMtg?.rate || 7) / 100 / 12;
 
     for (let year = 1; year <= 30; year++) {
       // Property value with appreciation
       propertyValue = propertyValue * (1 + appreciationRate);
       
       // Rental income with growth
-      const grossRents = results.income.grossRents * Math.pow(1 + incomeGrowthRate, year - 1);
-      const vacancyLoss = grossRents * (results.propertyInfo.vacancyRate / 100);
+      const grossRents = (results.income?.grossRents || inputs.grossRents || 0) * Math.pow(1 + incomeGrowthRate, year - 1);
+      const vacancyLoss = grossRents * ((results.propertyInfo?.vacancyRate || inputs.vacancyRate || 5) / 100);
       const operatingIncome = grossRents - vacancyLoss;
       
       // Operating expenses with growth
-      const propertyTaxes = (results.expenses.propertyTaxes || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
-      const insurance = (results.expenses.insurance || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
-      const propertyManagement = operatingIncome * (results.propertyInfo.managementRate / 100);
-      const maintenance = grossRents * ((inputs.maintenancePercent || 10) / 100);
+      const propertyTaxes = (results.expenses?.propertyTaxes || inputs.propertyTaxes || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
+      const insurance = (results.expenses?.insurance || inputs.insurance || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
+      const propertyManagement = operatingIncome * ((results.propertyInfo?.managementRate || inputs.managementRate || 8) / 100);
+      const maintenance = grossRents * ((inputs.maintenancePercent || inputs.repairsPercent || 5) / 100);
       const capEx = grossRents * ((inputs.capExPercent || 5) / 100);
       
       const operatingExpenses = propertyTaxes + insurance + propertyManagement + maintenance + capEx;
@@ -182,7 +195,7 @@ export default function BuyHoldProjections({ property, inputs, results }) {
       }
       
       // Tax benefits
-      const depreciation = year <= 27.5 ? (propertyValue * 0.85) / 27.5 : 0; // 85% of property value over 27.5 years
+      const depreciation = year <= 27.5 ? (propertyValue * 0.85) / 27.5 : 0;
       const totalDeductions = operatingExpenses + yearlyInterest + depreciation;
       
       // Post-tax cash flow (simplified - assumes 25% tax rate)
@@ -196,87 +209,69 @@ export default function BuyHoldProjections({ property, inputs, results }) {
       const sellingCosts = propertyValue * ((inputs.sellingCosts || 6) / 100);
       const saleProceeds = propertyValue - sellingCosts - loanBalance;
       const cumulativeCashFlow = projections.reduce((sum, p) => sum + p.cashFlow, 0) + cashFlow;
-      const totalCashInvested = results.cashRequirements.totalCashRequired;
+      const totalCashInvested = results.cashRequirements?.totalCashRequired || 0;
       const totalProfit = saleProceeds + cumulativeCashFlow - totalCashInvested;
       
       // Investment returns
-      const capRatePurchase = (noi / results.purchase.realPurchasePrice) * 100;
-      const capRateMarket = (noi / propertyValue) * 100;
-      const cashOnCash = (cashFlow / totalCashInvested) * 100;
-      const returnOnEquity = (cashFlow / totalEquity) * 100;
-      const roi = ((cashFlow + yearlyPrincipal) / totalCashInvested) * 100;
+      const purchasePrice = results.purchase?.realPurchasePrice || inputs.offerPrice || propertyValue;
+      const capRatePurchase = purchasePrice > 0 ? (noi / purchasePrice) * 100 : 0;
+      const capRateMarket = propertyValue > 0 ? (noi / propertyValue) * 100 : 0;
+      const cashOnCash = totalCashInvested > 0 ? (cashFlow / totalCashInvested) * 100 : 0;
+      const returnOnEquity = totalEquity > 0 ? (cashFlow / totalEquity) * 100 : 0;
+      const roi = totalCashInvested > 0 ? ((cashFlow + yearlyPrincipal) / totalCashInvested) * 100 : 0;
       
       // Calculate IRR (simplified)
-      const totalReturn = (saleProceeds + cumulativeCashFlow) / totalCashInvested;
-      const irr = (Math.pow(totalReturn, 1 / year) - 1) * 100;
+      const totalReturn = totalCashInvested > 0 ? (saleProceeds + cumulativeCashFlow) / totalCashInvested : 0;
+      const irr = totalReturn > 0 ? (Math.pow(totalReturn, 1 / year) - 1) * 100 : 0;
       
       // Financial ratios
-      const rentToValue = (grossRents / 12 / propertyValue) * 100;
-      const grm = propertyValue / grossRents;
-      const dcr = noi / loanPayments;
-      const breakEvenRatio = ((operatingExpenses + loanPayments) / operatingIncome) * 100;
-      const debtYield = (noi / startingBalance) * 100;
-      const equityMultiple = (saleProceeds + cumulativeCashFlow) / totalCashInvested;
+      const rentToValue = propertyValue > 0 ? (grossRents / 12 / propertyValue) * 100 : 0;
+      const grm = grossRents > 0 ? propertyValue / grossRents : 0;
+      const dcr = loanPayments > 0 ? noi / loanPayments : 0;
+      const breakEvenRatio = operatingIncome > 0 ? ((operatingExpenses + loanPayments) / operatingIncome) * 100 : 0;
+      const debtYield = startingBalance > 0 ? (noi / startingBalance) * 100 : 0;
+      const equityMultiple = totalCashInvested > 0 ? (saleProceeds + cumulativeCashFlow) / totalCashInvested : 0;
       
       projections.push({
         year,
-        // Rental Income
         grossRents,
         vacancy: vacancyLoss,
-        vacancyRate: results.propertyInfo.vacancyRate,
+        vacancyRate: results.propertyInfo?.vacancyRate || inputs.vacancyRate || 5,
         operatingIncome,
         incomeIncrease: incomeGrowthRate * 100,
-        
-        // Operating Expenses
         propertyTaxes,
         insurance,
         propertyManagement,
         maintenance,
         capEx,
-        hoaFees: 0,
-        utilities: 0,
-        landscaping: 0,
-        accounting: 0,
         operatingExpenses,
         expenseIncrease: expenseGrowthRate * 100,
-        expenseRatio: (operatingExpenses / operatingIncome) * 100,
-        
-        // Cash Flow
+        expenseRatio: operatingIncome > 0 ? (operatingExpenses / operatingIncome) * 100 : 0,
         noi,
         loanPayments,
         cashFlow,
         postTaxCashFlow,
-        
-        // Tax Benefits
         operatingExpensesDeduction: operatingExpenses,
         loanInterest: yearlyInterest,
         depreciation,
         totalDeductions,
-        
-        // Equity
         propertyValue,
         appreciation: appreciationRate * 100,
         loanBalance,
-        ltvRatio: (loanBalance / propertyValue) * 100,
+        ltvRatio: propertyValue > 0 ? (loanBalance / propertyValue) * 100 : 0,
         totalEquity,
         principalPaid: yearlyPrincipal,
-        
-        // Sale Analysis
         sellingCosts,
         saleProceeds,
         cumulativeCashFlow,
         totalCashInvested,
         totalProfit,
-        
-        // Investment Returns
         capRatePurchase,
         capRateMarket,
         cashOnCash,
         returnOnEquity,
         roi,
         irr,
-        
-        // Financial Ratios
         rentToValue,
         grm,
         dcr,
@@ -343,25 +338,12 @@ export default function BuyHoldProjections({ property, inputs, results }) {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
-      <div className="mb-6 flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Buy & Hold Projections</h1>
-          <p className="text-gray-600">
-            These projections show how this property will perform as a rental in the future.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
-            📝 Edit Property
-          </button>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-            📊 Export
-          </button>
-          <button className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">
-            Show Milestones ▼
-          </button>
-        </div>
+      {/* Header - Simplified, no buttons */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Buy & Hold Projections</h1>
+        <p className="text-gray-600">
+          These projections show how this property will perform as a rental in the future.
+        </p>
       </div>
 
       {/* Projection Settings */}

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Edit } from 'lucide-react';
 
-// ✅ CORRECT PATH: investmentCalculations is in src/utils/
 import { BuyRentHoldCalculator } from '../../utils/investmentCalculations';
 
-// ✅ CORRECT PATHS: All section components are in ./sections/ subfolder
 import PurchaseRehabSection from './sections/PurchaseRehabSection';
 import FinancingSection from './sections/FinancingSection';
 import ValuationSection from './sections/ValuationSection';
@@ -57,23 +54,9 @@ export default function PropertyAnalysisContent({ property, inputs, onInputChang
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* Page Header */}
+      {/* Page Header - Simplified, no buttons */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-3xl font-bold text-gray-900">Property Analysis</h1>
-          <div className="flex gap-2">
-            <button 
-              onClick={onSave}
-              className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center gap-2"
-            >
-              <Edit className="w-4 h-4" />
-              Save Analysis
-            </button>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              Buy & Hold Projections
-            </button>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Property Analysis</h1>
         <p className="text-gray-600">
           This page shows the purchase breakdown, cash flow and investment returns for this property.
         </p>
