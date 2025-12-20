@@ -1,10 +1,5 @@
 /**
- * Property Service - UPDATED
- * 
- * KEY FIXES:
- * - Extracts unitCount from RentCast features.unitCount
- * - Properly calculates total rent = perUnitRent × units
- * - Passes unit info through to investment calculations
+ * Property Service
  * 
  * Fetches property data from RentCast API and calculates investment scores
  * using user's personal thresholds from InvestorProfile
@@ -112,7 +107,6 @@ export const BADGE_CONFIG = {
 
 /**
  * Get rent estimate from RentCast
- * IMPORTANT: Returns PER UNIT rent for multi-family properties
  */
 const getRentEstimate = async ({ address, city, state, zipCode, bedrooms, bathrooms, squareFootage, propertyType }) => {
   try {
@@ -146,13 +140,12 @@ const getRentEstimate = async ({ address, city, state, zipCode, bedrooms, bathro
     console.log('✅ RentCast Rent Response:', data);
 
     return {
-      rentEstimate: data.rent || null,  // This is PER UNIT rent
+      rentEstimate: data.rent || null,
       rentRangeLow: data.rentRangeLow || null,
       rentRangeHigh: data.rentRangeHigh || null,
       latitude: data.latitude,
       longitude: data.longitude,
-      comparables: data.comparables || [],
-      isPerUnitRent: true  // Flag that this is per-unit
+      comparables: data.comparables || []
     };
   } catch (error) {
     console.error('❌ RentCast Rent Error:', error);
@@ -161,8 +154,7 @@ const getRentEstimate = async ({ address, city, state, zipCode, bedrooms, bathro
 };
 
 /**
- * Get property details from RentCast (includes tax info AND unit count)
- * THIS IS WHERE WE GET features.unitCount
+ * Get property details from RentCast (includes tax info)
  */
 const getPropertyDetails = async ({ address, city, state, zipCode }) => {
   try {
@@ -189,42 +181,10 @@ const getPropertyDetails = async ({ address, city, state, zipCode }) => {
     }
 
     const data = await response.json();
-    console.log('✅ RentCast Property Response (raw):', data);
+    console.log('✅ RentCast Property Response:', data);
 
     const property = Array.isArray(data) ? data[0] : data;
     if (!property) return null;
-
-    // ============================================================
-    // CRITICAL FIX: Extract unitCount from features
-    // ============================================================
-    const unitCount = property.features?.unitCount || 1;
-    const isMultiFamily = detectMultiFamilyFromType(property.propertyType) || unitCount > 1;
-    
-    console.log('📊 Unit Count Extraction:', {
-      unitCount,
-      isMultiFamily,
-      propertyType: property.propertyType,
-      featuresUnitCount: property.features?.unitCount,
-      allFeatures: property.features
-    });
-
-    // Extract tax amount from propertyTaxes object (newest year)
-    let taxAmount = null;
-    if (property.propertyTaxes) {
-      const taxYears = Object.keys(property.propertyTaxes).sort().reverse();
-      if (taxYears.length > 0) {
-        taxAmount = property.propertyTaxes[taxYears[0]]?.total || null;
-      }
-    }
-
-    // Extract assessed value from taxAssessments (newest year)  
-    let assessedValue = null;
-    if (property.taxAssessments) {
-      const assessmentYears = Object.keys(property.taxAssessments).sort().reverse();
-      if (assessmentYears.length > 0) {
-        assessedValue = property.taxAssessments[assessmentYears[0]]?.value || null;
-      }
-    }
 
     return {
       propertyId: property.id,
@@ -234,29 +194,11 @@ const getPropertyDetails = async ({ address, city, state, zipCode }) => {
       lotSize: property.lotSize,
       yearBuilt: property.yearBuilt,
       propertyType: property.propertyType,
-      
-      // ============================================================
-      // UNIT COUNT - THE KEY FIX
-      // ============================================================
-      unitCount: unitCount,
-      isMultiFamily: isMultiFamily,
-      features: property.features || {},
-      
-      // Tax info
-      assessedValue: assessedValue,
-      taxAmount: taxAmount,
-      propertyTaxes: property.propertyTaxes,
-      taxAssessments: property.taxAssessments,
-      
-      // HOA
-      hoaFee: property.hoa?.fee || null,
-      
-      // Value estimates
+      assessedValue: property.assessedValue,
+      taxAmount: property.taxAmount,
       priceEstimate: property.price,
       priceRangeLow: property.priceRangeLow,
       priceRangeHigh: property.priceRangeHigh,
-      
-      // Sale history
       lastSaleDate: property.lastSaleDate,
       lastSalePrice: property.lastSalePrice
     };
@@ -264,16 +206,6 @@ const getPropertyDetails = async ({ address, city, state, zipCode }) => {
     console.error('❌ RentCast Property Error:', error);
     return null;
   }
-};
-
-/**
- * Detect multi-family from property type string
- */
-const detectMultiFamilyFromType = (propertyType) => {
-  if (!propertyType) return false;
-  const typeLower = propertyType.toLowerCase();
-  const multiTypes = ['multi family', 'multi-family', 'multifamily', 'apartment', 'duplex', 'triplex', 'quadplex', 'fourplex'];
-  return multiTypes.some(t => typeLower.includes(t));
 };
 
 /**
@@ -306,10 +238,9 @@ const calculateMonthlyMortgage = (principal, annualRate, years) => {
 // ==================== INVESTMENT SCORE CALCULATION ====================
 /**
  * Calculate investment score using USER'S PERSONAL THRESHOLDS
- * NOW PROPERLY HANDLES MULTI-FAMILY with total rent calculation
  */
 const calculateInvestmentScore = (data) => {
-  const { price, rentEstimate, unitCount = 1, propertyTax, insurance, hoaFee = 0 } = data;
+  const { price, rentEstimate, propertyTax, insurance } = data;
   
   if (!price || !rentEstimate) {
     return {
@@ -320,97 +251,53 @@ const calculateInvestmentScore = (data) => {
     };
   }
 
-  // ============================================================
-  // KEY FIX: Total rent = per unit rent × number of units
-  // ============================================================
-  const units = Math.max(1, unitCount);
-  const totalMonthlyRent = rentEstimate * units;
-  const annualRent = totalMonthlyRent * 12;
-  
-  console.log('📊 Investment Score - Rent Calculation:', {
-    rentEstimate,  // Per unit
-    units,
-    totalMonthlyRent,
-    annualRent
-  });
-
   // Get user's thresholds and financing defaults
   const thresholds = getInvestmentThresholds();
   const financing = getFinancingDefaults();
   
-  // Calculate expenses
-  const downPaymentPercent = financing.downPaymentPercent || 20;
-  const interestRate = financing.interestRate || 6.5;
-  const loanTermYears = financing.loanTermYears || 30;
-  
-  const downPayment = price * (downPaymentPercent / 100);
+  // Calculate financing
+  const downPayment = price * (financing.downPaymentPercent / 100);
   const loanAmount = price - downPayment;
-  const monthlyMortgage = calculateMonthlyMortgage(loanAmount, interestRate, loanTermYears);
-  
-  // Operating expenses based on total rent
-  const vacancyRate = thresholds.vacancyRate || 8;
-  const repairsPercent = thresholds.repairsPercent || 5;
-  const managementPercent = thresholds.managementPercent || 8;
-  const capExPercent = thresholds.capExPercent || 5;
-  
-  const monthlyVacancy = totalMonthlyRent * (vacancyRate / 100);
-  const monthlyRepairs = totalMonthlyRent * (repairsPercent / 100);
-  const monthlyManagement = totalMonthlyRent * (managementPercent / 100);
-  const monthlyCapEx = totalMonthlyRent * (capExPercent / 100);
-  
-  // Property-based expenses
-  const annualPropertyTax = propertyTax || price * 0.012;
-  const annualInsurance = insurance || price * 0.005;
-  const monthlyPropertyTax = annualPropertyTax / 12;
-  const monthlyInsurance = annualInsurance / 12;
-  const monthlyHOA = hoaFee || 0;
-  
-  // NOI Calculation (before debt service)
-  const effectiveMonthlyIncome = totalMonthlyRent - monthlyVacancy;
-  const monthlyOperatingExpenses = monthlyPropertyTax + monthlyInsurance + monthlyRepairs + 
-                                   monthlyManagement + monthlyCapEx + monthlyHOA;
-  const monthlyNOI = effectiveMonthlyIncome - monthlyOperatingExpenses;
-  const annualNOI = monthlyNOI * 12;
-  
-  // Cash Flow (after debt service)
-  const totalMonthlyExpenses = monthlyOperatingExpenses + monthlyMortgage;
-  const monthlyCashFlow = effectiveMonthlyIncome - totalMonthlyExpenses;
-  const annualCashFlow = monthlyCashFlow * 12;
-  
-  // Per-unit metrics (important for multi-family)
-  const monthlyCashFlowPerUnit = monthlyCashFlow / units;
-  const noiPerUnit = annualNOI / units;
-  const pricePerUnit = price / units;
-  
-  // Key Ratios
-  const capRate = (annualNOI / price) * 100;
+  const monthlyMortgage = calculateMonthlyMortgage(loanAmount, financing.interestRate, financing.loanTermYears);
   const closingCosts = price * 0.03;
   const totalInvestment = downPayment + closingCosts;
+  
+  // Calculate monthly income
+  const monthlyRent = rentEstimate;
+  const annualRent = monthlyRent * 12;
+  
+  // Calculate monthly expenses
+  const monthlyPropertyTax = (propertyTax || price * (financing.annualTaxRate / 100)) / 12;
+  const monthlyInsurance = (insurance || price * (financing.annualInsuranceRate / 100)) / 12;
+  const monthlyVacancy = monthlyRent * (financing.vacancyRate / 100);
+  const monthlyManagement = monthlyRent * (financing.managementRate / 100);
+  const monthlyMaintenance = monthlyRent * (financing.maintenanceRate / 100);
+  const monthlyCapEx = monthlyRent * (financing.capExRate / 100);
+  const monthlyHOA = data.hoa || 0;
+  
+  const totalMonthlyExpenses = monthlyMortgage + monthlyPropertyTax + monthlyInsurance + 
+                               monthlyVacancy + monthlyManagement + monthlyMaintenance + 
+                               monthlyCapEx + monthlyHOA;
+  
+  // Calculate key metrics
+  const monthlyCashFlow = monthlyRent - totalMonthlyExpenses;
+  const annualCashFlow = monthlyCashFlow * 12;
+  
+  // NOI (excludes mortgage)
+  const operatingExpenses = (monthlyPropertyTax + monthlyInsurance + monthlyVacancy + 
+                            monthlyManagement + monthlyMaintenance + monthlyCapEx + monthlyHOA) * 12;
+  const annualNOI = annualRent - operatingExpenses;
+  
+  // Key ratios
+  const capRate = (annualNOI / price) * 100;
   const cashOnCashReturn = (annualCashFlow / totalInvestment) * 100;
-  const dscr = monthlyMortgage > 0 ? monthlyNOI / monthlyMortgage : 0;
-  const grossYield = (annualRent / price) * 100;
-  const grm = price / annualRent;
+  const dscr = annualNOI / (monthlyMortgage * 12);
   
-  // Scoring weights
-  const weights = {
-    cashOnCash: 35,
-    capRate: 25,
-    dscr: 20,
-    cashFlow: 20
-  };
-  
-  // Scoring tiers
-  const tiers = {
-    cashOnCash: { excellent: 12, good: 8, fair: 5, poor: 2, minimum: 0 },
-    capRate: { excellent: 10, good: 8, fair: 6, poor: 4, minimum: 2 },
-    dscr: { excellent: 1.5, good: 1.25, fair: 1.1, poor: 1.0, minimum: 0.9 },
-    cashFlow: { excellent: 500, good: 300, fair: 150, poor: 50, minimum: 0 }
-  };
-  
-  // Calculate score for each metric
+  // ==================== SCORING USING USER'S THRESHOLDS ====================
+  const { weights, tiers } = thresholds;
   let score = 0;
   
-  // Cash on Cash scoring
+  // Cash-on-Cash Return scoring
   const cocTiers = tiers.cashOnCash;
   if (cashOnCashReturn >= cocTiers.excellent) score += weights.cashOnCash;
   else if (cashOnCashReturn >= cocTiers.good) score += weights.cashOnCash * 0.8;
@@ -434,34 +321,42 @@ const calculateInvestmentScore = (data) => {
   else if (dscr >= dscrTiers.poor) score += weights.dscr * 0.3;
   else if (dscr >= dscrTiers.minimum) score += weights.dscr * 0.15;
   
-  // Cash Flow scoring (use per-unit for multi-family fairness)
-  const cfValue = units > 1 ? monthlyCashFlowPerUnit : monthlyCashFlow;
+  // Cash Flow scoring
   const cfTiers = tiers.cashFlow;
-  if (cfValue >= cfTiers.excellent) score += weights.cashFlow;
-  else if (cfValue >= cfTiers.good) score += weights.cashFlow * 0.8;
-  else if (cfValue >= cfTiers.fair) score += weights.cashFlow * 0.6;
-  else if (cfValue >= cfTiers.poor) score += weights.cashFlow * 0.3;
-  else if (cfValue >= cfTiers.minimum) score += weights.cashFlow * 0.15;
+  if (monthlyCashFlow >= cfTiers.excellent) score += weights.cashFlow;
+  else if (monthlyCashFlow >= cfTiers.good) score += weights.cashFlow * 0.8;
+  else if (monthlyCashFlow >= cfTiers.fair) score += weights.cashFlow * 0.6;
+  else if (monthlyCashFlow >= cfTiers.poor) score += weights.cashFlow * 0.3;
+  else if (monthlyCashFlow >= cfTiers.minimum) score += weights.cashFlow * 0.15;
   
+  // Round score
   const finalScore = Math.round(score);
   
-  // Determine badge
+  // Determine badge based on score and user's targets
   let badge, badgeDescription;
-  if (finalScore >= 85) {
+  
+  // Also check if it meets user's specific targets
+  const meetsCapRate = capRate >= thresholds.targetCapRate;
+  const meetsCashOnCash = cashOnCashReturn >= thresholds.targetCashOnCash;
+  const meetsCashFlow = monthlyCashFlow >= thresholds.targetMonthlyCashFlow;
+  const meetsDSCR = dscr >= thresholds.targetDSCR;
+  const targetsMetCount = [meetsCapRate, meetsCashOnCash, meetsCashFlow, meetsDSCR].filter(Boolean).length;
+  
+  if (finalScore >= 85 || targetsMetCount === 4) {
     badge = 'excellent';
-    badgeDescription = 'Exceeds all investment targets';
-  } else if (finalScore >= 70) {
+    badgeDescription = 'Exceeds all your investment targets';
+  } else if (finalScore >= 70 || targetsMetCount >= 3) {
     badge = 'good';
-    badgeDescription = 'Meets most investment targets';
-  } else if (finalScore >= 50) {
+    badgeDescription = 'Meets most of your investment targets';
+  } else if (finalScore >= 50 || targetsMetCount >= 2) {
     badge = 'fair';
-    badgeDescription = 'Meets some investment targets';
-  } else if (finalScore >= 30) {
+    badgeDescription = 'Meets some of your investment targets';
+  } else if (finalScore >= 30 || targetsMetCount >= 1) {
     badge = 'risky';
-    badgeDescription = 'Below investment targets';
+    badgeDescription = 'Below your investment targets';
   } else {
     badge = 'avoid';
-    badgeDescription = 'Does not meet investment criteria';
+    badgeDescription = 'Does not meet your investment criteria';
   }
   
   return {
@@ -471,34 +366,30 @@ const calculateInvestmentScore = (data) => {
     cashFlow: Math.round(monthlyCashFlow),
     roi: Math.round(cashOnCashReturn * 10) / 10,
     
+    // Comparison with user's targets
+    targetComparison: {
+      capRate: { value: capRate, target: thresholds.targetCapRate, meets: meetsCapRate },
+      cashOnCash: { value: cashOnCashReturn, target: thresholds.targetCashOnCash, meets: meetsCashOnCash },
+      cashFlow: { value: monthlyCashFlow, target: thresholds.targetMonthlyCashFlow, meets: meetsCashFlow },
+      dscr: { value: dscr, target: thresholds.targetDSCR, meets: meetsDSCR }
+    },
+    
     metrics: {
-      // Income (Total)
-      rentPerUnit: rentEstimate,
-      totalMonthlyRent: totalMonthlyRent,
-      annualRent: annualRent,
-      
-      // Unit info
-      units: units,
-      isMultiFamily: units > 1,
+      // Income
+      monthlyRent,
+      annualRent,
       
       // Key ratios
       cashOnCashReturn: Math.round(cashOnCashReturn * 10) / 10,
       capRate: Math.round(capRate * 10) / 10,
       dscr: Math.round(dscr * 100) / 100,
-      grossYield: Math.round(grossYield * 10) / 10,
-      grm: Math.round(grm * 10) / 10,
       
-      // Cash flow (Total)
+      // Cash flow
       monthlyCashFlow: Math.round(monthlyCashFlow),
       annualCashFlow: Math.round(annualCashFlow),
       
-      // Per-unit metrics
-      monthlyCashFlowPerUnit: Math.round(monthlyCashFlowPerUnit),
-      noiPerUnit: Math.round(noiPerUnit),
-      pricePerUnit: Math.round(pricePerUnit),
-      
       // NOI
-      monthlyNOI: Math.round(monthlyNOI),
+      monthlyNOI: Math.round(annualNOI / 12),
       annualNOI: Math.round(annualNOI),
       
       // Investment
@@ -506,14 +397,14 @@ const calculateInvestmentScore = (data) => {
       downPayment: Math.round(downPayment),
       closingCosts: Math.round(closingCosts),
       
-      // Expense breakdown
+      // Expenses
       monthlyExpenses: Math.round(totalMonthlyExpenses),
       annualExpenses: Math.round(totalMonthlyExpenses * 12),
       expenseBreakdown: {
         mortgage: Math.round(monthlyMortgage),
         propertyTax: Math.round(monthlyPropertyTax),
         insurance: Math.round(monthlyInsurance),
-        repairs: Math.round(monthlyRepairs),
+        maintenance: Math.round(monthlyMaintenance),
         vacancy: Math.round(monthlyVacancy),
         management: Math.round(monthlyManagement),
         capEx: Math.round(monthlyCapEx),
@@ -526,7 +417,8 @@ const calculateInvestmentScore = (data) => {
 // ==================== MAIN EXPORT: GET PROPERTY DATA ON HOVER ====================
 /**
  * Get enriched property data when user hovers/clicks on property card
- * NOW PROPERLY FETCHES AND USES unitCount FROM RENTCAST
+ * @param {Object} property - Property from Realty API
+ * @returns {Object} Enriched data with rent estimate and investment analysis
  */
 export const getPropertyDataOnHover = async (property) => {
   try {
@@ -541,53 +433,32 @@ export const getPropertyDataOnHover = async (property) => {
     
     await waitForRateLimit();
     
-    // Fetch BOTH rent estimate AND property details (for unit count)
-    const [rentData, propertyDetails] = await Promise.all([
-      getRentEstimate({
-        address,
-        city,
-        state,
-        zipCode: zip,
-        bedrooms: beds,
-        bathrooms: baths,
-        squareFootage: sqft,
-        propertyType: mapPropertyType(property.propertyType)
-      }),
-      getPropertyDetails({ address, city, state, zipCode: zip })
-    ]);
-    
-    // ============================================================
-    // KEY FIX: Get unit count from property details
-    // ============================================================
-    const unitCount = propertyDetails?.unitCount || 
-                      estimateUnitsFromProperty(property);
-    const isMultiFamily = propertyDetails?.isMultiFamily || unitCount > 1;
-    
-    console.log('📊 Unit Count Result:', {
-      fromAPI: propertyDetails?.unitCount,
-      estimated: !propertyDetails?.unitCount,
-      final: unitCount,
-      isMultiFamily
+    // Fetch rent estimate
+    const rentData = await getRentEstimate({
+      address,
+      city,
+      state,
+      zipCode: zip,
+      bedrooms: beds,
+      bathrooms: baths,
+      squareFootage: sqft,
+      propertyType: mapPropertyType(property.propertyType)
     });
     
-    // Calculate total rent
-    const perUnitRent = rentData?.rentEstimate || null;
-    const totalMonthlyRent = perUnitRent ? perUnitRent * unitCount : null;
+    // Fetch property details (tax info)
+    let propertyDetails = null;
+    if (RENTCAST_API_KEY) {
+      await waitForRateLimit();
+      propertyDetails = await getPropertyDetails({ address, city, state, zipCode: zip });
+    }
     
     // Build enriched data
     const enrichedData = {
       // Original property data
       ...property,
       
-      // ============================================================
-      // UNIT COUNT DATA - THE KEY FIX
-      // ============================================================
-      unitCount: unitCount,
-      isMultiFamily: isMultiFamily,
-      
       // RentCast rent data
-      rentEstimate: perUnitRent,           // Per unit
-      totalMonthlyRent: totalMonthlyRent,  // Total (per unit × units)
+      rentEstimate: rentData?.rentEstimate || null,
       rentRangeLow: rentData?.rentRangeLow || null,
       rentRangeHigh: rentData?.rentRangeHigh || null,
       rentConfidence: rentData?.rentEstimate ? 'high' : 'low',
@@ -597,12 +468,10 @@ export const getPropertyDataOnHover = async (property) => {
       // RentCast property data
       propertyTax: propertyDetails?.taxAmount || null,
       assessedValue: propertyDetails?.assessedValue || null,
-      hoaFee: propertyDetails?.hoaFee || null,
       priceEstimate: propertyDetails?.priceEstimate || null,
       yearBuilt: propertyDetails?.yearBuilt || property.yearBuilt || null,
       lastSaleDate: propertyDetails?.lastSaleDate || null,
       lastSalePrice: propertyDetails?.lastSalePrice || null,
-      features: propertyDetails?.features || null,
       
       // Photos (from Realty API)
       photos: property.photos || [property.thumbnail],
@@ -612,15 +481,14 @@ export const getPropertyDataOnHover = async (property) => {
       dataSource: 'RentCast'
     };
     
-    // Calculate investment score WITH unit count
-    if (perUnitRent && price) {
+    // Calculate investment score
+    if (enrichedData.rentEstimate && price) {
       const analysis = calculateInvestmentScore({
         price,
-        rentEstimate: perUnitRent,  // Per unit rent
-        unitCount: unitCount,       // Number of units
+        rentEstimate: enrichedData.rentEstimate,
         propertyTax: enrichedData.propertyTax,
         insurance: null,
-        hoaFee: enrichedData.hoaFee || 0
+        hoa: 0
       });
       Object.assign(enrichedData, analysis);
     } else {
@@ -634,9 +502,7 @@ export const getPropertyDataOnHover = async (property) => {
     saveToCache(cacheKey, enrichedData);
     
     console.log(`✅ [HOVER] Analysis complete:`, {
-      rentPerUnit: enrichedData.rentEstimate,
-      totalRent: enrichedData.totalMonthlyRent,
-      units: enrichedData.unitCount,
+      rent: enrichedData.rentEstimate,
       score: enrichedData.investmentScore,
       badge: enrichedData.investmentBadge,
       cashFlow: enrichedData.cashFlow
@@ -649,8 +515,6 @@ export const getPropertyDataOnHover = async (property) => {
     return {
       ...property,
       rentEstimate: null,
-      unitCount: 1,
-      isMultiFamily: false,
       hasRentCastData: false,
       investmentScore: 0,
       investmentBadge: 'insufficient-data',
@@ -658,24 +522,6 @@ export const getPropertyDataOnHover = async (property) => {
       metrics: null
     };
   }
-};
-
-/**
- * Estimate units from property data when API doesn't have it
- */
-const estimateUnitsFromProperty = (property) => {
-  const propertyType = (property.propertyType || property.description?.type || '').toLowerCase();
-  const beds = property.beds || property.description?.beds || 0;
-  
-  if (propertyType.includes('duplex')) return 2;
-  if (propertyType.includes('triplex')) return 3;
-  if (propertyType.includes('quadplex') || propertyType.includes('fourplex')) return 4;
-  
-  if (propertyType.includes('apartment') || propertyType.includes('multi')) {
-    return Math.max(2, Math.round(beds / 2));
-  }
-  
-  return 1;
 };
 
 /**

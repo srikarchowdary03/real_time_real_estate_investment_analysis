@@ -83,8 +83,16 @@ export class BuyRentHoldCalculator {
       legal = 0
     } = this.inputs;
 
-    const closingCosts = lenderFee + brokerFee + environmentals + inspections + 
-                         appraisals + misc + transferTax + legal;
+    // Support purchaseCostsTotal if provided (from worksheet)
+    let closingCosts;
+    if (this.inputs.purchaseCostsTotal !== undefined && this.inputs.purchaseCostsTotal > 0) {
+      closingCosts = this.inputs.purchaseCostsTotal;
+    } else if (this.inputs.purchaseCostsPercent !== undefined && this.inputs.purchaseCostsPercent > 0) {
+      closingCosts = offerPrice * (this.inputs.purchaseCostsPercent / 100);
+    } else {
+      closingCosts = lenderFee + brokerFee + environmentals + inspections + 
+                     appraisals + misc + transferTax + legal;
+    }
 
     const realPurchasePrice = offerPrice + repairs + repairsContingency + closingCosts;
 
@@ -486,24 +494,45 @@ export class BuyRentHoldCalculator {
   }
 }
 
-// Quick Score for Property Cards
-export function calculateQuickScore(price, rentEstimate, propertyData = {}) {
+// =============================================================================
+// QUICK SCORE FOR PROPERTY CARDS (Original)
+// =============================================================================
+
+export function calculateQuickScore(price, rentEstimate, propertyData = {}, scoringConfig = null) {
   if (!price || !rentEstimate) {
-    return { score: 0, badge: 'insufficient-data', monthlyCashFlow: null, capRate: null };
+    return { 
+      score: 0, 
+      badge: 'insufficient-data', 
+      color: 'gray',
+      description: 'Not enough data to calculate score',
+      monthlyCashFlow: null, 
+      capRate: null,
+      cashOnCashROI: null,
+      dcr: null,
+      breakdown: {}
+    };
   }
 
-  const downPayment = price * 0.20;
-  const loanAmount = price * 0.80;
-  const monthlyMortgage = calculateMonthlyPayment(loanAmount, 7.0, 30);
+  // Use passed financing/expense data or defaults
+  const downPaymentPercent = propertyData.downPaymentPercent || 20;
+  const interestRate = propertyData.interestRate || 7.0;
+  const loanTermYears = propertyData.loanTermYears || 30;
+  const vacancyRate = propertyData.vacancyRate || 5;
+  const managementRate = propertyData.managementRate || 10;
+  const maintenanceRate = propertyData.maintenanceRate || 5;
+
+  const downPayment = price * (downPaymentPercent / 100);
+  const loanAmount = price - downPayment;
+  const monthlyMortgage = calculateMonthlyPayment(loanAmount, interestRate, loanTermYears);
   
   const annualRent = rentEstimate * 12;
-  const vacancyLoss = annualRent * 0.05;
+  const vacancyLoss = annualRent * (vacancyRate / 100);
   const effectiveIncome = annualRent - vacancyLoss;
   
   const propertyTax = price * 0.012;
   const insurance = price * 0.005;
-  const repairs = annualRent * 0.05;
-  const management = annualRent * 0.10;
+  const repairs = annualRent * (maintenanceRate / 100);
+  const management = annualRent * (managementRate / 100);
   const totalExpenses = propertyTax + insurance + repairs + management;
   
   const noi = effectiveIncome - totalExpenses;
@@ -512,44 +541,86 @@ export function calculateQuickScore(price, rentEstimate, propertyData = {}) {
   const monthlyCashFlow = annualCashFlow / 12;
   
   const capRate = (noi / price) * 100;
-  const totalCashRequired = downPayment + (price * 0.03);
+  const closingCosts = price * 0.03;
+  const totalCashRequired = downPayment + closingCosts;
   const cashOnCashROI = (annualCashFlow / totalCashRequired) * 100;
   const dcr = annualDebtService > 0 ? noi / annualDebtService : 0;
   
+  // Calculate score with breakdown
   let score = 0;
-  if (cashOnCashROI >= 12) score += 25;
-  else if (cashOnCashROI >= 8) score += 20;
-  else if (cashOnCashROI >= 5) score += 15;
-  else if (cashOnCashROI >= 0) score += 10;
-  else score += 5;
+  const breakdown = {};
   
-  if (capRate >= 8) score += 20;
-  else if (capRate >= 6) score += 15;
-  else if (capRate >= 5) score += 12;
-  else score += 8;
+  // Cap Rate scoring
+  let capRateScore = 0;
+  if (capRate >= 10) capRateScore = 100;
+  else if (capRate >= 7) capRateScore = 75;
+  else if (capRate >= 5) capRateScore = 50;
+  else if (capRate >= 3) capRateScore = 25;
+  else capRateScore = 10;
+  breakdown['Cap Rate'] = { value: capRate, score: capRateScore };
+  score += capRateScore * 0.25;
   
-  if (dcr >= 1.25) score += 20;
-  else if (dcr >= 1.1) score += 15;
-  else if (dcr >= 1.0) score += 10;
-  else score += 5;
+  // Cash on Cash scoring
+  let cocScore = 0;
+  if (cashOnCashROI >= 12) cocScore = 100;
+  else if (cashOnCashROI >= 8) cocScore = 75;
+  else if (cashOnCashROI >= 5) cocScore = 50;
+  else if (cashOnCashROI >= 0) cocScore = 25;
+  else cocScore = 10;
+  breakdown['CoC ROI'] = { value: cashOnCashROI, score: cocScore };
+  score += cocScore * 0.25;
   
-  if (monthlyCashFlow >= 300) score += 20;
-  else if (monthlyCashFlow >= 100) score += 15;
-  else if (monthlyCashFlow >= 0) score += 10;
-  else score += 5;
+  // Cash Flow scoring
+  let cfScore = 0;
+  if (monthlyCashFlow >= 500) cfScore = 100;
+  else if (monthlyCashFlow >= 300) cfScore = 75;
+  else if (monthlyCashFlow >= 100) cfScore = 50;
+  else if (monthlyCashFlow >= 0) cfScore = 25;
+  else cfScore = 10;
+  breakdown['Cash Flow'] = { value: monthlyCashFlow, score: cfScore };
+  score += cfScore * 0.30;
   
-  score += 10;
+  // DCR scoring
+  let dcrScore = 0;
+  if (dcr >= 1.5) dcrScore = 100;
+  else if (dcr >= 1.25) dcrScore = 75;
+  else if (dcr >= 1.1) dcrScore = 50;
+  else if (dcr >= 1.0) dcrScore = 25;
+  else dcrScore = 10;
+  breakdown['DCR'] = { value: dcr, score: dcrScore };
+  score += dcrScore * 0.20;
   
-  let badge;
-  if (score >= 70) badge = 'excellent';
-  else if (score >= 55) badge = 'good';
-  else if (score >= 40) badge = 'fair';
-  else if (score >= 25) badge = 'risky';
-  else badge = 'avoid';
+  score = Math.round(score);
+
+  let badge, color, description;
+  if (score >= 75) {
+    badge = 'excellent';
+    color = 'emerald';
+    description = 'Strong investment with excellent returns';
+  } else if (score >= 60) {
+    badge = 'good';
+    color = 'green';
+    description = 'Solid investment opportunity';
+  } else if (score >= 45) {
+    badge = 'fair';
+    color = 'yellow';
+    description = 'Average investment, may require negotiation';
+  } else if (score >= 30) {
+    badge = 'risky';
+    color = 'orange';
+    description = 'Below average returns, proceed with caution';
+  } else {
+    badge = 'avoid';
+    color = 'red';
+    description = 'Poor investment metrics';
+  }
 
   return {
     score,
     badge,
+    color,
+    description,
+    breakdown,
     monthlyCashFlow: Math.round(monthlyCashFlow),
     annualCashFlow: Math.round(annualCashFlow),
     capRate: Math.round(capRate * 100) / 100,
@@ -560,4 +631,193 @@ export function calculateQuickScore(price, rentEstimate, propertyData = {}) {
   };
 }
 
-export default { BuyRentHoldCalculator, calculateQuickScore };
+// =============================================================================
+// ADDITIONAL EXPORTS (for components that need these)
+// =============================================================================
+
+// Alias for backwards compatibility
+export const RentalPropertyCalculator = BuyRentHoldCalculator;
+
+// Verified score (same as quick score but marked as verified from API)
+export function calculateVerifiedScore(price, rentEstimate, propertyData = {}) {
+  const result = calculateQuickScore(price, rentEstimate, propertyData);
+  return { ...result, verified: true, source: 'RentCast API' };
+}
+
+// Multi-family detection
+export function detectMultiFamily(property, inputs) {
+  if (property?.rentCastData?.features?.unitCount > 1) {
+    return { isMultiFamily: true, units: property.rentCastData.features.unitCount, source: 'RentCast' };
+  }
+  if (inputs?.numberOfUnits > 1) {
+    return { isMultiFamily: true, units: inputs.numberOfUnits, source: 'Input' };
+  }
+  const type = (property?.propertyType || property?.type || '').toLowerCase();
+  if (type.includes('multi') || type.includes('apartment')) {
+    return { isMultiFamily: true, units: Math.max(2, Math.floor((property?.beds || 4) / 2)), source: 'Type' };
+  }
+  if (type.includes('duplex')) return { isMultiFamily: true, units: 2, source: 'Type' };
+  if (type.includes('triplex')) return { isMultiFamily: true, units: 3, source: 'Type' };
+  if (type.includes('fourplex')) return { isMultiFamily: true, units: 4, source: 'Type' };
+  return { isMultiFamily: false, units: 1, source: 'Default' };
+}
+
+// Scoring config
+export const DEFAULT_SCORING_CONFIG = {
+  weights: { cashOnCash: 25, capRate: 20, dcr: 20, monthlyCashflow: 20, totalROI: 15 },
+  thresholds: {
+    cashOnCash: { excellent: 12, good: 8, fair: 5, poor: 0 },
+    capRate: { excellent: 10, good: 8, fair: 6, poor: 4 },
+    dcr: { excellent: 1.5, good: 1.25, fair: 1.1, poor: 1.0 },
+    monthlyCashflow: { excellent: 500, good: 300, fair: 100, poor: 0 },
+    totalROI: { excellent: 20, good: 15, fair: 10, poor: 5 }
+  }
+};
+
+export const SCORING_PRESETS = {
+  conservative: {
+    metrics: {
+      capRate: { enabled: true, weight: 30 },
+      cashOnCashROI: { enabled: true, weight: 30 },
+      monthlyCashFlow: { enabled: true, weight: 25 },
+      dcr: { enabled: true, weight: 15 }
+    },
+    thresholds: {
+      capRate: { excellent: 10, good: 8, fair: 6, risky: 4 },
+      cashOnCashROI: { excellent: 12, good: 10, fair: 7, risky: 4 },
+      monthlyCashFlow: { excellent: 500, good: 350, fair: 200, risky: 50 },
+      dcr: { excellent: 1.6, good: 1.4, fair: 1.2, risky: 1.0 }
+    }
+  },
+  moderate: {
+    metrics: {
+      capRate: { enabled: true, weight: 25 },
+      cashOnCashROI: { enabled: true, weight: 25 },
+      monthlyCashFlow: { enabled: true, weight: 30 },
+      dcr: { enabled: true, weight: 20 }
+    },
+    thresholds: {
+      capRate: { excellent: 10, good: 7, fair: 5, risky: 3 },
+      cashOnCashROI: { excellent: 12, good: 8, fair: 5, risky: 2 },
+      monthlyCashFlow: { excellent: 500, good: 300, fair: 100, risky: 0 },
+      dcr: { excellent: 1.5, good: 1.25, fair: 1.1, risky: 1.0 }
+    }
+  },
+  aggressive: {
+    metrics: {
+      capRate: { enabled: true, weight: 20 },
+      cashOnCashROI: { enabled: true, weight: 20 },
+      monthlyCashFlow: { enabled: true, weight: 40 },
+      dcr: { enabled: true, weight: 20 }
+    },
+    thresholds: {
+      capRate: { excellent: 8, good: 6, fair: 4, risky: 2 },
+      cashOnCashROI: { excellent: 10, good: 6, fair: 3, risky: 0 },
+      monthlyCashFlow: { excellent: 400, good: 200, fair: 50, risky: -100 },
+      dcr: { excellent: 1.3, good: 1.1, fair: 1.0, risky: 0.9 }
+    }
+  }
+};
+
+// Rent estimation
+export function estimateRent(property) {
+  const price = property?.price || property?.list_price || 0;
+  if (!price) return 0;
+  let mult = price < 150000 ? 0.009 : price < 300000 ? 0.008 : price < 500000 ? 0.007 : 0.005;
+  return Math.round((price * mult) / 50) * 50;
+}
+
+// Merge scoring config
+export function mergeScoringConfig(base = {}, override = {}) {
+  return {
+    weights: { ...DEFAULT_SCORING_CONFIG.weights, ...base.weights, ...override.weights },
+    thresholds: { ...DEFAULT_SCORING_CONFIG.thresholds, ...base.thresholds, ...override.thresholds }
+  };
+}
+
+// Calculate dynamic score with custom config
+export function calculateDynamicScore(metrics, config = DEFAULT_SCORING_CONFIG) {
+  let score = 0;
+  const { weights, thresholds } = config;
+  
+  // Cash on Cash
+  if (metrics.cashOnCashROI >= thresholds.cashOnCash.excellent) score += weights.cashOnCash;
+  else if (metrics.cashOnCashROI >= thresholds.cashOnCash.good) score += weights.cashOnCash * 0.8;
+  else if (metrics.cashOnCashROI >= thresholds.cashOnCash.fair) score += weights.cashOnCash * 0.6;
+  else score += weights.cashOnCash * 0.3;
+  
+  // Cap Rate
+  if (metrics.capRate >= thresholds.capRate.excellent) score += weights.capRate;
+  else if (metrics.capRate >= thresholds.capRate.good) score += weights.capRate * 0.8;
+  else if (metrics.capRate >= thresholds.capRate.fair) score += weights.capRate * 0.6;
+  else score += weights.capRate * 0.3;
+  
+  // DCR
+  if (metrics.dcr >= thresholds.dcr.excellent) score += weights.dcr;
+  else if (metrics.dcr >= thresholds.dcr.good) score += weights.dcr * 0.8;
+  else if (metrics.dcr >= thresholds.dcr.fair) score += weights.dcr * 0.6;
+  else score += weights.dcr * 0.3;
+  
+  // Monthly Cashflow
+  if (metrics.monthlyCashflow >= thresholds.monthlyCashflow.excellent) score += weights.monthlyCashflow;
+  else if (metrics.monthlyCashflow >= thresholds.monthlyCashflow.good) score += weights.monthlyCashflow * 0.8;
+  else if (metrics.monthlyCashflow >= thresholds.monthlyCashflow.fair) score += weights.monthlyCashflow * 0.6;
+  else score += weights.monthlyCashflow * 0.3;
+  
+  // Total ROI
+  if (metrics.totalROI >= thresholds.totalROI.excellent) score += weights.totalROI;
+  else if (metrics.totalROI >= thresholds.totalROI.good) score += weights.totalROI * 0.8;
+  else if (metrics.totalROI >= thresholds.totalROI.fair) score += weights.totalROI * 0.6;
+  else score += weights.totalROI * 0.3;
+  
+  return Math.round(score);
+}
+
+// DEFAULTS object for components that import it
+export const DEFAULTS = {
+  // Financing
+  ltv: 80,
+  firstMtgLTV: 80,
+  interestRate: 7.0,
+  firstMtgRate: 7.0,
+  amortization: 30,
+  firstMtgAmortization: 30,
+  downPaymentPercent: 20,
+  
+  // Closing costs
+  purchaseCostsPercent: 3.0,
+  closingCostsPercent: 3.0,
+  
+  // Expenses (as % of rent)
+  vacancyRate: 5.0,
+  managementRate: 8.0,
+  repairsPercent: 5.0,
+  maintenanceRate: 5.0,
+  capExRate: 5.0,
+  
+  // Property costs (as % of price)
+  propertyTaxRate: 1.2,
+  insuranceRate: 0.5,
+  
+  // Projections
+  appreciationRate: 3.0,
+  incomeGrowthRate: 2.0,
+  expenseGrowthRate: 2.0,
+  sellingCosts: 6.0,
+  holdingPeriod: 5
+};
+
+// Default export
+export default { 
+  BuyRentHoldCalculator, 
+  RentalPropertyCalculator: BuyRentHoldCalculator,
+  calculateQuickScore,
+  calculateVerifiedScore,
+  calculateDynamicScore,
+  detectMultiFamily,
+  estimateRent,
+  mergeScoringConfig,
+  DEFAULT_SCORING_CONFIG,
+  SCORING_PRESETS,
+  DEFAULTS
+};

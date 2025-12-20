@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, User, LogOut, Heart, LayoutDashboard, Settings, Search } from 'lucide-react';
+import { Menu, X, User, LogOut, Heart, LayoutDashboard, Settings, Search, Sliders } from 'lucide-react';
 import { auth } from '../../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -152,13 +152,23 @@ const Header = () => {
                         My Properties
                       </Link>
 
+                      {/* Investor Profile - NEW */}
+                      <Link
+                        to="/investor-profile"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <Sliders className="w-4 h-4" />
+                        Investor Profile
+                      </Link>
+
                       <Link
                         to="/profile"
                         onClick={() => setIsDropdownOpen(false)}
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                       >
                         <User className="w-4 h-4" />
-                        Profile
+                        Account
                       </Link>
 
                       <Link
@@ -252,13 +262,23 @@ const Header = () => {
                     Dashboard
                   </Link>
 
+                  {/* Investor Profile - Mobile */}
+                  <Link
+                    to="/investor-profile"
+                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Sliders className="w-4 h-4" />
+                    Investor Profile
+                  </Link>
+
                   <Link
                     to="/profile"
                     className="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium py-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <User className="w-4 h-4" />
-                    Profile
+                    Account
                   </Link>
 
                   <Link

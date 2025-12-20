@@ -1,10 +1,13 @@
 /**
- * RentCast API Service
+ * RentCast API Service - UPDATED
+ * 
+ * FIXES:
+ * - Now extracts features.unitCount from /properties endpoint
+ * - Properly handles multi-family properties
+ * - Rent estimate is PER UNIT (must multiply by unitCount for total)
  * 
  * Free Tier: 50 API calls/month
  * Docs: https://developers.rentcast.io
- * 
- * Get your API key: https://app.rentcast.io/app/api
  */
 
 const RENTCAST_API_KEY = import.meta.env.VITE_RENTCAST_API_KEY;
@@ -14,15 +17,8 @@ const BASE_URL = 'https://api.rentcast.io/v1';
  * Get rent estimate for a property by address
  * Endpoint: GET /avm/rent/long-term
  * 
- * @param {Object} params - Property parameters
- * @param {string} params.address - Street address (e.g., "123 Main St")
- * @param {string} params.city - City name
- * @param {string} params.state - State code (e.g., "CA")
- * @param {string} params.zipCode - ZIP code
- * @param {number} params.bedrooms - Number of bedrooms (optional)
- * @param {number} params.bathrooms - Number of bathrooms (optional)
- * @param {number} params.squareFootage - Square footage (optional)
- * @param {string} params.propertyType - Property type (optional): Single Family, Condo, Townhouse, etc.
+ * IMPORTANT: For multi-family properties, this returns rent PER UNIT
+ * You must multiply by unitCount to get total rent
  */
 export const getRentEstimate = async ({ 
   address, 
@@ -54,7 +50,7 @@ export const getRentEstimate = async ({
     if (squareFootage) params.append('squareFootage', squareFootage);
     if (propertyType) params.append('propertyType', propertyType);
 
-    console.log('🏠 RentCast API Request:', `${BASE_URL}/avm/rent/long-term?${params}`);
+    console.log('🏠 RentCast Rent API Request:', `${BASE_URL}/avm/rent/long-term?${params}`);
 
     const response = await fetch(`${BASE_URL}/avm/rent/long-term?${params}`, {
       method: 'GET',
@@ -66,7 +62,7 @@ export const getRentEstimate = async ({
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('❌ RentCast API Error:', response.status, errorData);
+      console.error('❌ RentCast Rent API Error:', response.status, errorData);
       
       if (response.status === 401) {
         console.error('Invalid API key or inactive subscription');
@@ -80,39 +76,31 @@ export const getRentEstimate = async ({
     }
 
     const data = await response.json();
-    console.log('✅ RentCast Response:', data);
-
-    /**
-     * Response format:
-     * {
-     *   "rent": 2500,           // Estimated monthly rent
-     *   "rentRangeLow": 2200,   // Low end of rent range
-     *   "rentRangeHigh": 2800,  // High end of rent range
-     *   "latitude": 37.7749,
-     *   "longitude": -122.4194,
-     *   "comparables": [...]     // Similar rental properties nearby
-     * }
-     */
+    console.log('✅ RentCast Rent Response:', data);
 
     return {
-      rentEstimate: data.rent || null,
+      rentEstimate: data.rent || null,        // This is PER UNIT rent
       rentRangeLow: data.rentRangeLow || null,
       rentRangeHigh: data.rentRangeHigh || null,
       latitude: data.latitude,
       longitude: data.longitude,
       comparables: data.comparables || [],
-      source: 'RentCast'
+      source: 'RentCast',
+      // Note: This is per-unit rent for multi-family
+      isPerUnitRent: true
     };
 
   } catch (error) {
-    console.error('❌ RentCast API Error:', error);
+    console.error('❌ RentCast Rent API Error:', error);
     return null;
   }
 };
 
 /**
- * Get property details including value estimate
+ * Get property details including unit count and tax info
  * Endpoint: GET /properties
+ * 
+ * CRITICAL: This endpoint returns features.unitCount for multi-family properties
  */
 export const getPropertyDetails = async ({
   address,
@@ -133,6 +121,8 @@ export const getPropertyDetails = async ({
       zipCode: zipCode
     });
 
+    console.log('🏠 RentCast Property API Request:', `${BASE_URL}/properties?${params}`);
+
     const response = await fetch(`${BASE_URL}/properties?${params}`, {
       method: 'GET',
       headers: {
@@ -147,19 +137,57 @@ export const getPropertyDetails = async ({
     }
 
     const data = await response.json();
-    console.log('✅ RentCast Property Details:', data);
+    console.log('✅ RentCast Property Details (raw):', data);
 
     // Returns array of properties, get first match
     const property = Array.isArray(data) ? data[0] : data;
     
     if (!property) return null;
 
+    // ============================================================
+    // CRITICAL FIX: Extract unitCount from features object
+    // ============================================================
+    const unitCount = property.features?.unitCount || 1;
+    const isMultiFamily = detectMultiFamilyFromType(property.propertyType) || unitCount > 1;
+    
+    console.log('📊 Property Analysis:', {
+      propertyType: property.propertyType,
+      unitCount: unitCount,
+      isMultiFamily: isMultiFamily,
+      features: property.features
+    });
+
+    // Extract tax data from propertyTaxes object (newest year)
+    let taxAmount = null;
+    if (property.propertyTaxes) {
+      const taxYears = Object.keys(property.propertyTaxes).sort().reverse();
+      if (taxYears.length > 0) {
+        taxAmount = property.propertyTaxes[taxYears[0]]?.total || null;
+      }
+    }
+
+    // Extract assessed value from taxAssessments (newest year)
+    let assessedValue = null;
+    if (property.taxAssessments) {
+      const assessmentYears = Object.keys(property.taxAssessments).sort().reverse();
+      if (assessmentYears.length > 0) {
+        assessedValue = property.taxAssessments[assessmentYears[0]]?.value || null;
+      }
+    }
+
     return {
+      // Property ID
       propertyId: property.id,
+      
+      // Address info
       address: property.addressLine1,
+      addressLine2: property.addressLine2,
       city: property.city,
       state: property.state,
       zipCode: property.zipCode,
+      county: property.county,
+      
+      // Property characteristics
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
       squareFootage: property.squareFootage,
@@ -167,19 +195,59 @@ export const getPropertyDetails = async ({
       yearBuilt: property.yearBuilt,
       propertyType: property.propertyType,
       
+      // ============================================================
+      // UNIT COUNT - THE KEY FIX
+      // ============================================================
+      unitCount: unitCount,
+      isMultiFamily: isMultiFamily,
+      
+      // All features from public records
+      features: {
+        unitCount: unitCount,
+        floorCount: property.features?.floorCount || null,
+        roomCount: property.features?.roomCount || null,
+        architectureType: property.features?.architectureType || null,
+        garage: property.features?.garage || false,
+        garageSpaces: property.features?.garageSpaces || 0,
+        garageType: property.features?.garageType || null,
+        pool: property.features?.pool || false,
+        poolType: property.features?.poolType || null,
+        heating: property.features?.heating || false,
+        heatingType: property.features?.heatingType || null,
+        cooling: property.features?.cooling || false,
+        coolingType: property.features?.coolingType || null,
+        fireplace: property.features?.fireplace || false,
+        roofType: property.features?.roofType || null,
+        exteriorType: property.features?.exteriorType || null,
+        foundationType: property.features?.foundationType || null,
+      },
+      
       // Tax info
-      assessedValue: property.assessedValue,
-      taxAmount: property.taxAmount,
+      assessedValue: assessedValue,
+      taxAmount: taxAmount,
+      propertyTaxes: property.propertyTaxes || null,
+      taxAssessments: property.taxAssessments || null,
       
-      // Value estimate
-      priceEstimate: property.price,
-      priceRangeLow: property.priceRangeLow,
-      priceRangeHigh: property.priceRangeHigh,
+      // HOA info
+      hoaFee: property.hoa?.fee || null,
       
+      // Value estimate (if available)
+      priceEstimate: property.price || null,
+      priceRangeLow: property.priceRangeLow || null,
+      priceRangeHigh: property.priceRangeHigh || null,
+      
+      // Sale history
       lastSaleDate: property.lastSaleDate,
       lastSalePrice: property.lastSalePrice,
+      history: property.history || null,
       
-      source: 'RentCast'
+      // Owner info (if available)
+      owner: property.owner || null,
+      ownerOccupied: property.ownerOccupied || null,
+      
+      // Metadata
+      source: 'RentCast',
+      rawData: property // Keep raw data for debugging
     };
 
   } catch (error) {
@@ -189,13 +257,29 @@ export const getPropertyDetails = async ({
 };
 
 /**
- * Get rent estimate with comparables
+ * Detect multi-family from property type string
+ */
+const detectMultiFamilyFromType = (propertyType) => {
+  if (!propertyType) return false;
+  
+  const multiTypes = [
+    'multi family', 'multi-family', 'multifamily',
+    'apartment', 'duplex', 'triplex', 'quadplex', 'fourplex',
+    'multi unit', 'multi-unit', 'multiunit'
+  ];
+  
+  const typeLower = propertyType.toLowerCase();
+  return multiTypes.some(t => typeLower.includes(t));
+};
+
+/**
+ * Get complete property data with rent estimate AND unit count
  * This is the MAIN function to use on Property Analysis Page
  * 
  * @param {Object} property - Property from Realty API
- * @returns {Object} - Rent data for calculations
+ * @returns {Object} - Complete data for calculations including unitCount
  */
-export const getPropertyRentData = async (property) => {
+export const getCompletePropertyData = async (property) => {
   try {
     // Extract address components from various property formats
     const address = property.location?.address?.line || 
@@ -217,25 +301,102 @@ export const getPropertyRentData = async (property) => {
       return null;
     }
 
-    console.log('🔍 Fetching rent estimate for:', { address, city, state, zipCode });
+    console.log('🔍 Fetching complete property data for:', { address, city, state, zipCode });
 
-    const rentData = await getRentEstimate({
-      address,
-      city,
-      state,
-      zipCode,
-      bedrooms: property.description?.beds || property.beds,
-      bathrooms: property.description?.baths || property.baths,
-      squareFootage: property.description?.sqft || property.sqft,
-      propertyType: mapPropertyType(property.description?.type || property.propertyType)
+    // Fetch both rent estimate AND property details (for unit count)
+    const [rentData, propertyDetails] = await Promise.all([
+      getRentEstimate({
+        address,
+        city,
+        state,
+        zipCode,
+        bedrooms: property.description?.beds || property.beds,
+        bathrooms: property.description?.baths || property.baths,
+        squareFootage: property.description?.sqft || property.sqft,
+        propertyType: mapPropertyType(property.description?.type || property.propertyType)
+      }),
+      getPropertyDetails({ address, city, state, zipCode })
+    ]);
+
+    // Get unit count from property details (THE KEY FIX)
+    const unitCount = propertyDetails?.unitCount || 
+                      property.units || 
+                      estimateUnitsFromProperty(property);
+    
+    const isMultiFamily = propertyDetails?.isMultiFamily || 
+                          unitCount > 1 ||
+                          detectMultiFamilyFromType(property.propertyType);
+
+    // Calculate total rent (per unit × number of units)
+    const perUnitRent = rentData?.rentEstimate || null;
+    const totalMonthlyRent = perUnitRent ? perUnitRent * unitCount : null;
+
+    console.log('📊 Rent Calculation:', {
+      perUnitRent,
+      unitCount,
+      totalMonthlyRent,
+      isMultiFamily
     });
 
-    return rentData;
+    return {
+      // Rent data
+      rentEstimate: perUnitRent,           // Per unit rent
+      totalMonthlyRent: totalMonthlyRent,  // Total rent (per unit × units)
+      rentRangeLow: rentData?.rentRangeLow || null,
+      rentRangeHigh: rentData?.rentRangeHigh || null,
+      comparables: rentData?.comparables || [],
+      
+      // Unit information (THE KEY FIX)
+      unitCount: unitCount,
+      isMultiFamily: isMultiFamily,
+      
+      // Property details from RentCast
+      propertyDetails: propertyDetails,
+      
+      // Tax info
+      taxAmount: propertyDetails?.taxAmount || null,
+      assessedValue: propertyDetails?.assessedValue || null,
+      hoaFee: propertyDetails?.hoaFee || null,
+      
+      // Features
+      features: propertyDetails?.features || null,
+      
+      // Metadata
+      source: 'RentCast',
+      hasRentData: !!perUnitRent,
+      hasPropertyData: !!propertyDetails
+    };
 
   } catch (error) {
-    console.error('❌ getPropertyRentData Error:', error);
+    console.error('❌ getCompletePropertyData Error:', error);
     return null;
   }
+};
+
+/**
+ * Estimate units from property data when RentCast doesn't have it
+ * This is a fallback using property type and bed/bath counts
+ */
+const estimateUnitsFromProperty = (property) => {
+  const propertyType = (property.propertyType || property.description?.type || '').toLowerCase();
+  const beds = property.beds || property.description?.beds || 0;
+  const baths = property.baths || property.description?.baths || 0;
+  
+  // Explicit types
+  if (propertyType.includes('duplex')) return 2;
+  if (propertyType.includes('triplex')) return 3;
+  if (propertyType.includes('quadplex') || propertyType.includes('fourplex')) return 4;
+  
+  // For apartment/multi-family, estimate from beds
+  if (propertyType.includes('apartment') || propertyType.includes('multi')) {
+    // Assume average of 2 beds per unit
+    const estimatedUnits = Math.max(2, Math.round(beds / 2));
+    console.log(`📊 Estimated ${estimatedUnits} units from ${beds} beds`);
+    return estimatedUnits;
+  }
+  
+  // Single family default
+  return 1;
 };
 
 /**
@@ -304,9 +465,13 @@ export const getMarketStats = async (zipCode) => {
   }
 };
 
+// Legacy alias for backward compatibility
+export const getPropertyRentData = getCompletePropertyData;
+
 export default {
   getRentEstimate,
   getPropertyDetails,
+  getCompletePropertyData,
   getPropertyRentData,
   getMarketStats
 };

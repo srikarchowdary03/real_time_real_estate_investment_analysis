@@ -1,3 +1,15 @@
+/**
+ * database.js - Firebase Database Service
+ * 
+ * COMPLETE VERSION with all exports needed by:
+ * - propertycard.jsx
+ * - ExpandedPropertyView.jsx
+ * - useSavedProperties.js
+ * - PropertyAnalysisPage.jsx
+ * - Databasetest.jsx
+ * - PropertyDetails.jsx
+ * - MyProperties.jsx
+ */
 import { 
   collection, 
   doc, 
@@ -12,7 +24,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// ✅ Use your ORIGINAL import path
+// Adjust this import path to match your project structure
 import { db } from '../config/firebase';
 
 const COLLECTION_NAME = 'savedProperties';
@@ -22,17 +34,20 @@ const COLLECTION_NAME = 'savedProperties';
  */
 export const saveProperty = async (userId, propertyData, zillowData = {}, quickMetrics = {}) => {
   try {
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('Valid User ID is required');
+    }
+    if (!propertyData?.property_id) {
+      throw new Error('Property ID is required');
+    }
+
     console.log('🔵 saveProperty called');
     console.log('  userId:', userId);
     console.log('  propertyId:', propertyData.property_id);
-    
-    if (!userId) throw new Error('User ID is required');
-    if (!propertyData?.property_id) throw new Error('Property ID is required');
 
     const docId = `${userId}_${propertyData.property_id}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
 
-    // Handle both raw API data (location.address) and normalized data (flat)
     const extractAddress = () => {
       if (propertyData.location?.address?.line) return propertyData.location.address.line;
       return propertyData.address || '';
@@ -62,8 +77,34 @@ export const saveProperty = async (userId, propertyData, zillowData = {}, quickM
       return zillowData?.rentEstimate || 
              zillowData?.rent || 
              propertyData.rentEstimate ||
+             propertyData.totalMonthlyRent ||
+             propertyData.rentCastData?.rentEstimate ||
              propertyData.enrichedData?.rentEstimate ||
              null;
+    };
+
+    // Extract thumbnail from multiple possible sources
+    const extractThumbnail = () => {
+      return propertyData.thumbnail ||
+             propertyData.primary_photo?.href ||
+             propertyData.primaryPhoto ||
+             propertyData.photos?.[0]?.href ||
+             propertyData.photos?.[0] ||
+             zillowData?.photos?.[0]?.href ||
+             zillowData?.photos?.[0] ||
+             zillowData?.thumbnail ||
+             '';
+    };
+
+    // Extract photos array
+    const extractPhotos = () => {
+      if (propertyData.photos?.length > 0) {
+        return propertyData.photos;
+      }
+      if (zillowData?.photos?.length > 0) {
+        return zillowData.photos;
+      }
+      return [];
     };
 
     const savedPropertyData = {
@@ -81,25 +122,45 @@ export const saveProperty = async (userId, propertyData, zillowData = {}, quickM
         sqft: extractSqft(),
       },
 
+      // THUMBNAIL - critical for My Properties page display
+      thumbnail: extractThumbnail(),
+      
+      // Photos array
+      photos: extractPhotos(),
+
+      // Rent data
       rentEstimate: extractRentEstimate(),
-      rentRangeLow: zillowData?.rentRangeLow || null,
-      rentRangeHigh: zillowData?.rentRangeHigh || null,
-      photos: zillowData?.photos || propertyData.photos || [],
-      annualTaxAmount: zillowData?.annualTaxAmount || zillowData?.taxData?.annualAmount || null,
+      rentRangeLow: zillowData?.rentRangeLow || propertyData.rentRangeLow || null,
+      rentRangeHigh: zillowData?.rentRangeHigh || propertyData.rentRangeHigh || null,
+      
+      // RentCast data (if available)
+      rentCastData: propertyData.rentCastData || zillowData?.rentCastData || null,
+      
+      // Tax data
+      annualTaxAmount: zillowData?.annualTaxAmount || zillowData?.taxData?.annualAmount || propertyData.annualTaxAmount || null,
+      
+      // Multi-family info
+      unitCount: propertyData.unitCount || propertyData.detectedUnits || propertyData.units || 1,
+      isMultiFamily: propertyData.isMultiFamily || (propertyData.unitCount > 1) || (propertyData.detectedUnits > 1) || false,
 
-      quickScore: quickMetrics?.score || quickMetrics?.investmentScore || null,
-      estimatedCashFlow: quickMetrics?.monthlyCashFlow || null,
-      estimatedCapRate: quickMetrics?.capRate || null,
-      investmentBadge: zillowData?.investmentBadge || quickMetrics?.badge || null,
+      // Investment metrics
+      quickScore: quickMetrics?.score || quickMetrics?.investmentScore || propertyData.metrics?.score || null,
+      estimatedCashFlow: quickMetrics?.monthlyCashFlow || propertyData.metrics?.monthlyCashFlow || null,
+      estimatedCapRate: quickMetrics?.capRate || propertyData.metrics?.capRate || null,
+      investmentBadge: zillowData?.investmentBadge || quickMetrics?.badge || propertyData.badge || null,
 
+      // User data
       notes: '',
       tags: [],
+      
+      // Timestamps
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
     await setDoc(docRef, savedPropertyData);
     console.log('✅ Property saved:', docId);
+    console.log('  thumbnail:', savedPropertyData.thumbnail ? 'Yes' : 'No');
     return docId;
 
   } catch (error) {
@@ -108,22 +169,36 @@ export const saveProperty = async (userId, propertyData, zillowData = {}, quickM
   }
 };
 
+/**
+ * Check if property is saved
+ */
 export const isPropertySaved = async (userId, propertyId) => {
   try {
-    if (!userId || !propertyId) return false;
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return false;
+    }
+    
     const docId = `${userId}_${propertyId}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
     const docSnap = await getDoc(docRef);
     return docSnap.exists();
   } catch (error) {
-    console.error('Error checking saved:', error);
+    if (error.code !== 'permission-denied') {
+      console.error('Error checking saved:', error);
+    }
     return false;
   }
 };
 
+/**
+ * Remove property from saved
+ */
 export const unsaveProperty = async (userId, propertyId) => {
   try {
-    if (!userId || !propertyId) throw new Error('User ID and Property ID required');
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
     const docId = `${userId}_${propertyId}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
     await deleteDoc(docRef);
@@ -134,9 +209,15 @@ export const unsaveProperty = async (userId, propertyId) => {
   }
 };
 
+/**
+ * Get all saved properties for user
+ */
 export const getSavedProperties = async (userId) => {
   try {
-    if (!userId) throw new Error('User ID required');
+    if (!userId || typeof userId !== 'string') {
+      return [];
+    }
+    
     const q = query(
       collection(db, COLLECTION_NAME),
       where('userId', '==', userId),
@@ -150,14 +231,48 @@ export const getSavedProperties = async (userId) => {
     console.log(`✅ Got ${properties.length} saved properties`);
     return properties;
   } catch (error) {
+    if (error.code === 'permission-denied') {
+      return [];
+    }
     console.error('❌ Get saved error:', error);
     throw error;
   }
 };
 
+/**
+ * Get a single saved property
+ */
+export const getSavedProperty = async (userId, propertyId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return null;
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return null;
+  } catch (error) {
+    if (error.code === 'permission-denied') {
+      return null;
+    }
+    console.error('❌ Get property error:', error);
+    return null;
+  }
+};
+
+/**
+ * Update a saved property (general)
+ */
 export const updateSavedProperty = async (userId, propertyId, updates) => {
   try {
-    if (!userId || !propertyId) throw new Error('User ID and Property ID required');
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
     const docId = `${userId}_${propertyId}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
     await updateDoc(docRef, { ...updates, updatedAt: serverTimestamp() });
@@ -168,19 +283,137 @@ export const updateSavedProperty = async (userId, propertyId, updates) => {
   }
 };
 
-export const getSavedProperty = async (userId, propertyId) => {
+/**
+ * Update property with rent data from RentCast
+ */
+export const updatePropertyWithRentData = async (userId, propertyId, rentData) => {
   try {
-    if (!userId || !propertyId) return null;
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return false;
+    }
+    
     const docId = `${userId}_${propertyId}`;
     const docRef = doc(db, COLLECTION_NAME, docId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
-    }
-    return null;
+    
+    const updates = {
+      rentEstimate: rentData.totalMonthlyRent || rentData.rentEstimate || null,
+      rentRangeLow: rentData.rentRangeLow || null,
+      rentRangeHigh: rentData.rentRangeHigh || null,
+      unitCount: rentData.unitCount || 1,
+      isMultiFamily: rentData.isMultiFamily || (rentData.unitCount > 1),
+      rentCastData: rentData,
+      rentSource: 'RentCast',
+      rentDataUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(docRef, updates);
+    console.log('✅ Property updated with rent data:', docId);
+    return true;
   } catch (error) {
-    console.error('❌ Get property error:', error);
-    return null;
+    if (error.code === 'permission-denied') {
+      return false;
+    }
+    console.error('❌ Update rent data error:', error);
+    return false;
+  }
+};
+
+/**
+ * Update property analysis/metrics
+ */
+export const updatePropertyAnalysis = async (userId, propertyId, analysis) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    const updates = {
+      analysis: analysis,
+      quickScore: analysis?.score || analysis?.investmentScore || null,
+      estimatedCashFlow: analysis?.monthlyCashFlow || null,
+      estimatedCapRate: analysis?.capRate || null,
+      analysisUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(docRef, updates);
+    console.log('✅ Property analysis updated:', docId);
+  } catch (error) {
+    console.error('❌ Update analysis error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property notes
+ */
+export const updatePropertyNotes = async (userId, propertyId, notes) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      notes: notes,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property notes updated:', docId);
+  } catch (error) {
+    console.error('❌ Update notes error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property tags
+ */
+export const updatePropertyTags = async (userId, propertyId, tags) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      tags: tags,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property tags updated:', docId);
+  } catch (error) {
+    console.error('❌ Update tags error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property thumbnail (for fixing missing thumbnails)
+ */
+export const updatePropertyThumbnail = async (userId, propertyId, thumbnailUrl) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      thumbnail: thumbnailUrl,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property thumbnail updated:', docId);
+  } catch (error) {
+    console.error('❌ Update thumbnail error:', error);
+    throw error;
   }
 };
 
@@ -189,6 +422,11 @@ export default {
   isPropertySaved,
   unsaveProperty,
   getSavedProperties,
+  getSavedProperty,
   updateSavedProperty,
-  getSavedProperty
+  updatePropertyWithRentData,
+  updatePropertyAnalysis,
+  updatePropertyNotes,
+  updatePropertyTags,
+  updatePropertyThumbnail
 };

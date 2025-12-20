@@ -1,185 +1,274 @@
-import { Home, Edit, Image, TrendingUp, BarChart3, Trash2, Heart, Check } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Save, BarChart3 } from 'lucide-react';
 
-export default function PropertySidebar({ property, activeSection, onSectionChange, onBack, isSaved = false }) {
-  const formatPrice = (price) => {
-    if (!price) return 'N/A';
+// Import calculator with DEFAULTS
+import { BuyRentHoldCalculator, DEFAULTS } from '../../utils/investmentCalculations';
+
+// Import section components
+import PurchaseRehabSection from './sections/PurchaseRehabSection';
+import FinancingSection from './sections/FinancingSection';
+import ValuationSection from './sections/ValuationSection';
+import CashFlowSection from './sections/CashFlowSection';
+import InvestmentReturnsSection from './sections/InvestmentReturnsSection';
+import FinancialRatiosSection from './sections/FinancialRatiosSection';
+import PurchaseCriteriaSection from './sections/PurchaseCriteriaSection';
+
+export default function PropertyAnalysisContent({ 
+  property, 
+  inputs, 
+  onInputChange, 
+  onSave, 
+  onResultsChange,
+  onNavigateToWorksheet,
+  onNavigateToProjections 
+}) {
+  const [results, setResults] = useState(null);
+  const [viewMode, setViewMode] = useState('monthly');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Get purchase price
+  const getPurchasePrice = useCallback(() => {
+    return inputs?.offerPrice || property?.price || property?.propertyData?.price || 0;
+  }, [inputs?.offerPrice, property?.price, property?.propertyData?.price]);
+
+  // Get rent estimate
+  const getRentEstimate = useCallback(() => {
+    if (property?.rentCastData?.rentEstimate) return property.rentCastData.rentEstimate;
+    if (property?.rentEstimate) return property.rentEstimate;
+    if (inputs?.grossRents > 0) return inputs.grossRents / 12;
+    const price = getPurchasePrice();
+    return price > 0 ? Math.round((price * 0.007) / 50) * 50 : 0;
+  }, [property, inputs?.grossRents, getPurchasePrice]);
+
+  // STEP 1: Initialize defaults FIRST (before any calculations)
+  useEffect(() => {
+    if (isInitialized) return;
+    
+    const price = getPurchasePrice();
+    const monthlyRent = getRentEstimate();
+    
+    console.log('🔧 PropertyAnalysis: Initializing defaults...', { price, monthlyRent });
+    
+    // Set basic values
+    if (!inputs?.offerPrice && price > 0) {
+      onInputChange('offerPrice', price);
+    }
+    if (!inputs?.fairMarketValue && price > 0) {
+      onInputChange('fairMarketValue', price);
+    }
+    if (!inputs?.grossRents && monthlyRent > 0) {
+      onInputChange('grossRents', monthlyRent * 12);
+    }
+    
+    // CRITICAL: Set purchase costs percentage and total with 3% default
+    if (inputs?.purchaseCostsPercent === undefined || inputs?.purchaseCostsPercent === null) {
+      console.log('💰 Setting purchaseCostsPercent to default:', DEFAULTS.purchaseCostsPercent);
+      onInputChange('purchaseCostsPercent', DEFAULTS.purchaseCostsPercent);
+    }
+    
+    // Calculate purchase costs total
+    const percent = inputs?.purchaseCostsPercent ?? DEFAULTS.purchaseCostsPercent;
+    const calculatedTotal = price * (percent / 100);
+    
+    // Only set if not already set or if suspiciously low
+    if (!inputs?.purchaseCostsTotal || inputs.purchaseCostsTotal < 100) {
+      console.log('💰 Setting purchaseCostsTotal:', calculatedTotal, '(', percent, '% of', price, ')');
+      onInputChange('purchaseCostsTotal', calculatedTotal);
+    }
+    
+    // Set other defaults
+    const defaultsToApply = {
+      firstMtgLTV: DEFAULTS.ltv,
+      firstMtgRate: DEFAULTS.interestRate,
+      firstMtgAmortization: DEFAULTS.amortization,
+      vacancyRate: DEFAULTS.vacancyRate,
+      managementRate: DEFAULTS.managementRate,
+      repairsPercent: DEFAULTS.repairsPercent,
+      maintenancePercent: DEFAULTS.repairsPercent,
+      appreciationRate: DEFAULTS.appreciationRate,
+      incomeGrowthRate: 2.0,
+      expenseGrowthRate: 2.0,
+      sellingCosts: 6.0
+    };
+    
+    Object.entries(defaultsToApply).forEach(([key, value]) => {
+      if (inputs?.[key] === undefined || inputs?.[key] === null) {
+        onInputChange(key, value);
+      }
+    });
+    
+    setIsInitialized(true);
+  }, [inputs, property, onInputChange, getPurchasePrice, getRentEstimate, isInitialized]);
+
+  // STEP 2: Calculate results AFTER initialization
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      const price = getPurchasePrice();
+      
+      // Build inputs with guaranteed defaults
+      const calculationInputs = {
+        ...inputs,
+        offerPrice: inputs?.offerPrice || price,
+        fairMarketValue: inputs?.fairMarketValue || price,
+        grossRents: inputs?.grossRents || getRentEstimate() * 12,
+        purchaseCostsPercent: inputs?.purchaseCostsPercent ?? DEFAULTS.purchaseCostsPercent,
+        purchaseCostsTotal: inputs?.purchaseCostsTotal || (price * (DEFAULTS.purchaseCostsPercent / 100)),
+        firstMtgLTV: inputs?.firstMtgLTV ?? DEFAULTS.ltv,
+        firstMtgRate: inputs?.firstMtgRate ?? DEFAULTS.interestRate,
+        firstMtgAmortization: inputs?.firstMtgAmortization ?? DEFAULTS.amortization,
+        vacancyRate: inputs?.vacancyRate ?? DEFAULTS.vacancyRate,
+        managementRate: inputs?.managementRate ?? DEFAULTS.managementRate,
+        repairsPercent: inputs?.repairsPercent ?? inputs?.maintenancePercent ?? DEFAULTS.repairsPercent,
+        appreciationRate: inputs?.appreciationRate ?? DEFAULTS.appreciationRate,
+      };
+      
+      console.log('📊 Calculating with inputs:', {
+        price: calculationInputs.offerPrice,
+        purchaseCostsPercent: calculationInputs.purchaseCostsPercent,
+        purchaseCostsTotal: calculationInputs.purchaseCostsTotal,
+        grossRents: calculationInputs.grossRents
+      });
+      
+      const calculator = new BuyRentHoldCalculator(property, calculationInputs);
+      const analysis = calculator.getCompleteAnalysis();
+      
+      setResults(analysis);
+      
+      if (onResultsChange) {
+        onResultsChange(analysis);
+      }
+      
+      console.log('📊 Analysis Results:', analysis);
+    } catch (error) {
+      console.error('❌ Calculation error:', error);
+    }
+  }, [inputs, property, isInitialized, getPurchasePrice, getRentEstimate, onResultsChange]);
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '$0';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(price);
+    }).format(value);
   };
 
-  const address = property.address || property.location?.address?.line || 'Address not available';
-  const city = property.city || property.location?.address?.city || '';
-  const state = property.state || property.location?.address?.state_code || '';
-  const zipCode = property.zipCode || property.zip || property.location?.address?.postal_code || '';
-  const price = property.price || property.list_price || 0;
-  const beds = property.beds || property.description?.beds || 0;
-  const baths = property.baths || property.description?.baths || 0;
-  const sqft = property.sqft || property.description?.sqft || 0;
-  const image = property.image || property.thumbnail || property.primary_photo?.href || property.photos?.[0]?.href || 'https://via.placeholder.com/400x300?text=No+Image';
-  
-  // Get rent and calculate cap rate
-  const rentEstimate = property.rentEstimate || 0;
-  const annualNOI = (rentEstimate * 12) * 0.65;
-  const capRate = price > 0 ? ((annualNOI / price) * 100).toFixed(1) : 0;
-  const rentSource = property.rentSource || 'estimate';
+  const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
+    return `${value.toFixed(1)}%`;
+  };
 
-  const menuSections = [
-    {
-      items: [
-        { id: 'description', label: 'Property Description', icon: Home },
-        { id: 'worksheet', label: 'Purchase Worksheet', icon: Edit },
-        { id: 'photos', label: 'Photos', icon: Image }
-      ]
-    },
-    {
-      title: 'ANALYSIS',
-      items: [
-        { id: 'analysis', label: 'Property Analysis', icon: TrendingUp },
-        { id: 'projections', label: 'Buy & Hold Projections', icon: BarChart3 }
-      ]
-    }
-  ];
+  if (!results) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-gray-600">Calculating analysis...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-screen overflow-y-auto">
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="p-4 text-blue-600 hover:text-blue-800 flex items-center gap-2 border-b"
-      >
-        ← View all properties
-      </button>
+    <div className="max-w-7xl mx-auto p-6">
+      {/* Page Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-gray-900">Property Analysis</h1>
+          <div className="flex gap-2">
+            <button 
+              onClick={onSave}
+              className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center gap-2 font-medium"
+            >
+              <Save className="w-4 h-4" />
+              Save Analysis
+            </button>
+            <button 
+              onClick={onNavigateToProjections}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Buy & Hold Projections
+            </button>
+          </div>
+        </div>
+        <p className="text-gray-600">
+          This page shows the purchase breakdown, cash flow and investment returns for this property.
+        </p>
+      </div>
 
-      {/* Property Image */}
-      <div className="relative h-48 bg-gray-200">
-        <img
-          src={image}
-          alt={address}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = 'https://placehold.co/400x300/e5e7eb/6b7280?text=No+Image';
-          }}
+      {/* Top Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-500 mb-1 font-medium">CASH NEEDED</div>
+          <div className="text-2xl font-bold text-blue-600">
+            {formatCurrency(results?.cashRequirements?.totalCashRequired ?? 0)}
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-500 mb-1 font-medium">CASH FLOW</div>
+          <div className={`text-2xl font-bold ${(results?.cashflow?.totalMonthlyProfitOrLoss ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(results?.cashflow?.totalMonthlyProfitOrLoss ?? 0)}/mo
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-500 mb-1 font-medium">CAP RATE</div>
+          <div className="text-2xl font-bold text-purple-600">
+            {formatPercent(results?.quickAnalysis?.capRateOnPP ?? 0)}
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-500 mb-1 font-medium">COC ROI</div>
+          <div className={`text-2xl font-bold ${(results?.quickAnalysis?.cashOnCashROI ?? 0) >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+            {formatPercent(results?.quickAnalysis?.cashOnCashROI ?? 0)}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Sections */}
+      <div className="space-y-6">
+        <PurchaseRehabSection 
+          results={results}
+          inputs={inputs}
+          onInputChange={onInputChange}
+          onNavigateToWorksheet={onNavigateToWorksheet}
         />
-        <div className="absolute top-2 left-2 flex gap-1">
-          {/* Saved Badge */}
-          {isSaved && (
-            <span className="inline-flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs font-semibold">
-              <Check className="w-3 h-3" />
-              SAVED
-            </span>
-          )}
-          {/* Rent Source Badge */}
-          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-            rentSource === 'RentCast' 
-              ? 'bg-emerald-600 text-white' 
-              : 'bg-orange-600 text-white'
-          }`}>
-            {rentSource === 'RentCast' ? 'RENTCAST' : 'RENTAL'}
-          </span>
-        </div>
-        {/* Share Button */}
-        <button 
-          onClick={() => {
-            navigator.clipboard.writeText(window.location.href);
-            alert('Link copied to clipboard!');
-          }}
-          className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-blue-700"
-        >
-          Share
-        </button>
-      </div>
 
-      {/* Property Details */}
-      <div className="p-4 border-b">
-        <div className="mb-3">
-          <div className="text-sm font-semibold text-gray-900">
-            Investment Property Analysis
-          </div>
-        </div>
+        <FinancingSection 
+          results={results}
+          inputs={inputs}
+          onInputChange={onInputChange}
+        />
 
-        <div className="text-sm text-gray-600 space-y-1">
-          <div className="font-medium text-gray-900">{address}</div>
-          <div>{city}, {state} {zipCode}</div>
-          <div className="flex items-center gap-3 text-xs mt-2">
-            {beds > 0 && <span>{beds} BR</span>}
-            {baths > 0 && <span>· {baths} BA</span>}
-            {sqft > 0 && <span>· {sqft.toLocaleString()} Sq.Ft.</span>}
-          </div>
-        </div>
+        <ValuationSection 
+          results={results}
+          inputs={inputs}
+          property={property}
+          onInputChange={onInputChange}
+        />
 
-        <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-blue-600">{formatPrice(price)}</span>
-          {capRate > 0 && (
-            <span className="text-sm text-gray-500">{capRate}% Cap Rate</span>
-          )}
-        </div>
+        <CashFlowSection 
+          results={results}
+          inputs={inputs}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onInputChange={onInputChange}
+        />
 
-        {/* Rent Estimate */}
-        {rentEstimate > 0 && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-sm text-gray-600">Est. Rent:</span>
-            <span className={`text-sm font-semibold ${
-              rentSource === 'RentCast' ? 'text-emerald-600' : 'text-blue-600'
-            }`}>
-              {formatPrice(rentEstimate)}/mo
-            </span>
-            {rentSource === 'RentCast' && (
-              <span className="text-xs text-emerald-600">✓ API</span>
-            )}
-          </div>
-        )}
-      </div>
+        <InvestmentReturnsSection 
+          results={results}
+        />
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 py-2">
-        {menuSections.map((section, idx) => (
-          <div key={idx} className="mb-1">
-            {section.title && (
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {section.title}
-              </div>
-            )}
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.id;
-              
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSectionChange(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                    isActive 
-                      ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium' 
-                      : 'text-gray-700 hover:bg-gray-50 border-l-4 border-transparent'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
+        <FinancialRatiosSection 
+          results={results}
+        />
 
-      {/* Saved Status Footer */}
-      <div className="p-4 border-t bg-gray-50">
-        {isSaved ? (
-          <div className="flex items-center justify-center gap-2 text-sm text-green-600">
-            <Heart className="w-4 h-4" fill="currentColor" />
-            <span className="font-medium">Property Saved</span>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-            <Heart className="w-4 h-4" />
-            <span>Not saved</span>
-          </div>
-        )}
+        <PurchaseCriteriaSection 
+          results={results}
+        />
       </div>
     </div>
   );

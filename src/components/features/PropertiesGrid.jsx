@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import PropertyCard from './propertycard';
 import ExpandedPropertyView from './ExpandedPropertyView';
 
@@ -10,8 +10,12 @@ const PropertiesGrid = ({
   selectedProperty,
   onPropertyHover,
   expandedPropertyId,
-  onPropertyExpand
+  onPropertyExpand,
+  onPropertyRentUpdate  // NEW: Callback when rent data is loaded
 }) => {
+  // Local state to track updated properties with rent data
+  const [propertyRentData, setPropertyRentData] = useState({});
+
   // Deduplicate properties by property_id
   const uniqueProperties = useMemo(() => {
     const seen = new Set();
@@ -24,6 +28,36 @@ const PropertiesGrid = ({
       return true;
     });
   }, [properties]);
+
+  // Merge rent data into properties
+  const propertiesWithRentData = useMemo(() => {
+    return uniqueProperties.map(property => {
+      const rentData = propertyRentData[property.property_id];
+      if (rentData) {
+        return {
+          ...property,
+          rentCastData: rentData
+        };
+      }
+      return property;
+    });
+  }, [uniqueProperties, propertyRentData]);
+
+  // Handle rent data loaded from ExpandedPropertyView
+  const handleRentDataLoaded = useCallback((propertyId, rentData) => {
+    console.log('📊 Rent data loaded for property:', propertyId, rentData);
+    
+    // Update local state
+    setPropertyRentData(prev => ({
+      ...prev,
+      [propertyId]: rentData
+    }));
+
+    // Notify parent if callback provided
+    if (onPropertyRentUpdate) {
+      onPropertyRentUpdate(propertyId, rentData);
+    }
+  }, [onPropertyRentUpdate]);
 
   // Calculate optimal layout based on screen width
   const getLayoutConfig = () => {
@@ -56,8 +90,8 @@ const PropertiesGrid = ({
 
   const { marginRight, columns } = getLayoutConfig();
 
-  // Find the expanded property
-  const expandedProperty = uniqueProperties.find(p => p.property_id === expandedPropertyId);
+  // Find the expanded property (with rent data if available)
+  const expandedProperty = propertiesWithRentData.find(p => p.property_id === expandedPropertyId);
 
   return (
     <>
@@ -74,8 +108,6 @@ const PropertiesGrid = ({
           marginRight: marginRight,
         }}
       >
-        {/* NOTE: Header is rendered in Properties.jsx, not here - to prevent duplicate */}
-        
         {/* Property Cards Grid */}
         <div 
           className={`
@@ -83,24 +115,32 @@ const PropertiesGrid = ({
             ${columns}
           `}
         >
-          {uniqueProperties.map((property, index) => (
+          {propertiesWithRentData.map((property, index) => (
             <PropertyCard 
               key={`${property.property_id}-${property.listing_id || index}`}
               property={property}
               isSelected={selectedProperty?.property_id === property.property_id}
-              onHover={() => onPropertyHover(property)}
+              onHover={() => onPropertyHover && onPropertyHover(property)}
               isExpanded={expandedPropertyId === property.property_id}
-              onExpand={() => onPropertyExpand(property.property_id)}
+              onExpand={() => onPropertyExpand && onPropertyExpand(property.property_id)}
             />
           ))}
         </div>
+
+        {/* Empty State */}
+        {propertiesWithRentData.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No properties found. Try adjusting your search criteria.</p>
+          </div>
+        )}
       </div>
 
       {/* Floating Modal Overlay - Rendered outside grid */}
       {expandedProperty && (
         <ExpandedPropertyView
           property={expandedProperty}
-          onClose={() => onPropertyExpand(null)}
+          onClose={() => onPropertyExpand && onPropertyExpand(null)}
+          onRentDataLoaded={handleRentDataLoaded}
         />
       )}
     </>
