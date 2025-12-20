@@ -106,14 +106,59 @@ const MyProperties = () => {
     return `${sign}$${absValue.toLocaleString()}`;
   };
 
-  const getScoreBadge = (score) => {
+  // Calculate quick score based on metrics
+  const calculateQuickScore = (property) => {
+    const price = property.propertyData?.price || 0;
+    const rent = property.rentEstimate || 0;
+    const capRate = property.estimatedCapRate || 0;
+    const cashFlow = property.estimatedCashFlow || 0;
+    
+    // If we have a saved score, use it
+    if (property.quickScore && property.quickScore !== 'unknown') {
+      return property.quickScore;
+    }
+    
+    // Calculate score based on available data
+    let score = 50;
+    
+    // Cap rate scoring
+    if (capRate >= 8) score += 20;
+    else if (capRate >= 6) score += 10;
+    else if (capRate >= 4) score += 5;
+    else if (capRate > 0 && capRate < 3) score -= 10;
+    
+    // Cash flow scoring
+    if (cashFlow >= 500) score += 20;
+    else if (cashFlow >= 200) score += 10;
+    else if (cashFlow >= 0) score += 5;
+    else if (cashFlow < -200) score -= 15;
+    
+    // Rent-to-price ratio
+    if (rent > 0 && price > 0) {
+      const rentRatio = (rent * 12 / price) * 100;
+      if (rentRatio >= 10) score += 10;
+      else if (rentRatio >= 8) score += 5;
+      else if (rentRatio < 5) score -= 10;
+    }
+    
+    // Clamp score
+    score = Math.max(0, Math.min(100, score));
+    
+    // Convert to label
+    if (score >= 70) return 'good';
+    if (score >= 50) return 'okay';
+    return 'poor';
+  };
+
+  const getScoreBadge = (property) => {
+    const score = calculateQuickScore(property);
+    
     const badges = {
       good: { label: 'Good Deal', icon: '🟢', bg: 'bg-green-100', text: 'text-green-800' },
-      okay: { label: 'Okay Deal', icon: '🟡', bg: 'bg-yellow-100', text: 'text-yellow-800' },
-      poor: { label: 'Poor Deal', icon: '🔴', bg: 'bg-red-100', text: 'text-red-800' },
-      unknown: { label: 'No Data', icon: '⚪', bg: 'bg-gray-100', text: 'text-gray-800' }
+      okay: { label: 'Fair Deal', icon: '🟡', bg: 'bg-yellow-100', text: 'text-yellow-800' },
+      poor: { label: 'Below Avg', icon: '🔴', bg: 'bg-red-100', text: 'text-red-800' }
     };
-    return badges[score] || badges.unknown;
+    return badges[score] || badges.okay;
   };
 
   // Get thumbnail from multiple possible sources
@@ -228,7 +273,7 @@ const MyProperties = () => {
         {/* Properties Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProperties.map((property) => {
-            const scoreBadge = getScoreBadge(property.quickScore);
+            const scoreBadge = getScoreBadge(property);
             
             return (
               <div

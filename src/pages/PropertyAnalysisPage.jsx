@@ -284,6 +284,10 @@ export default function PropertyAnalysisPage() {
       { id: 'description', label: 'Property Description', icon: Home },
       { id: 'worksheet', label: 'Purchase Worksheet', icon: Edit },
       { id: 'photos', label: 'Photos', icon: Image }
+    ]},
+    { title: 'ANALYSIS', items: [
+      { id: 'analysis', label: 'Property Analysis', icon: TrendingUp },
+      { id: 'projections', label: 'Buy & Hold Projections', icon: BarChart3 }
     ]}
   ];
 
@@ -313,6 +317,36 @@ export default function PropertyAnalysisPage() {
     );
   }
 
+  // Extract photos from multiple sources
+  const propertyPhotos = useMemo(() => {
+    const photos = [];
+    
+    // Check property.photos array
+    if (property?.photos?.length > 0) {
+      property.photos.forEach(p => {
+        const url = typeof p === 'string' ? p : p?.href || p?.url;
+        if (url) photos.push({ href: url });
+      });
+    }
+    
+    // Add thumbnail if not already included
+    if (property?.thumbnail && !photos.some(p => p.href === property.thumbnail)) {
+      photos.unshift({ href: property.thumbnail });
+    }
+    
+    // Add primary_photo if not already included
+    if (property?.primary_photo?.href && !photos.some(p => p.href === property.primary_photo.href)) {
+      photos.unshift({ href: property.primary_photo.href });
+    }
+    
+    // Add primaryPhoto if not already included
+    if (property?.primaryPhoto && !photos.some(p => p.href === property.primaryPhoto)) {
+      photos.unshift({ href: property.primaryPhoto });
+    }
+    
+    return photos;
+  }, [property]);
+
   const renderContent = () => {
     switch (activeSection) {
       case 'worksheet':
@@ -323,19 +357,31 @@ export default function PropertyAnalysisPage() {
         return (
           <div className="max-w-7xl mx-auto p-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-6">Property Photos</h1>
-            {property.photos?.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {property.photos.map((photo, idx) => (
-                  <img key={idx} src={photo.href || photo} alt={`Photo ${idx + 1}`}
-                    className="w-full h-48 object-cover rounded-lg"
-                    onError={(e) => { e.target.src = 'https://placehold.co/400x300?text=No+Image'; }}
-                  />
+            <p className="text-gray-600 mb-4">{address}</p>
+            {propertyPhotos.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {propertyPhotos.map((photo, idx) => (
+                  <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                    <img 
+                      src={photo.href} 
+                      alt={`Photo ${idx + 1}`}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                      onError={(e) => { 
+                        e.target.onerror = null;
+                        e.target.src = 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'; 
+                      }}
+                    />
+                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                      {idx + 1}/{propertyPhotos.length}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                 <Image className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No photos available.</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Photos Available</h3>
+                <p className="text-gray-600">This property doesn't have any photos.</p>
               </div>
             )}
           </div>
