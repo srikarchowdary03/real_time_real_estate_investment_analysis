@@ -3,7 +3,7 @@ import { X, Heart, MapPin, Bed, Bath, Square, TrendingUp, AlertCircle, ExternalL
 import { useNavigate } from 'react-router-dom';
 import { saveProperty, unsaveProperty, isPropertySaved, updatePropertyWithRentData } from '../../services/database';
 import { useAuth } from '../../hooks/useAuth';
-import { getPropertyRentData } from '../../services/rentcastAPI';
+import { getPropertyRentData } from '../../services/rentCastApi';
 
 /**
  * ExpandedPropertyView - Floating modal for property quick analysis

@@ -1,13 +1,5 @@
 /**
- * RentCast API Service - UPDATED
- * 
- * FIXES:
- * - Now extracts features.unitCount from /properties endpoint
- * - Properly handles multi-family properties
- * - Rent estimate is PER UNIT (must multiply by unitCount for total)
- * 
- * Free Tier: 50 API calls/month
- * Docs: https://developers.rentcast.io
+ * RentCast API Service 
  */
 
 const RENTCAST_API_KEY = import.meta.env.VITE_RENTCAST_API_KEY;
@@ -16,9 +8,6 @@ const BASE_URL = 'https://api.rentcast.io/v1';
 /**
  * Get rent estimate for a property by address
  * Endpoint: GET /avm/rent/long-term
- * 
- * IMPORTANT: For multi-family properties, this returns rent PER UNIT
- * You must multiply by unitCount to get total rent
  */
 export const getRentEstimate = async ({ 
   address, 
