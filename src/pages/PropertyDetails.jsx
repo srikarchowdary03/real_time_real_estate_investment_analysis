@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, X, Loader2, TrendingUp, Calculator
 } from 'lucide-react';
 import { searchProperties } from '../services/realtyAPI';
-import { getPropertyRentData } from '../services/rentcastAPI';
+import { getPropertyRentData } from '../services/Rentcastapi';
 import { saveProperty, unsaveProperty, isPropertySaved } from '../services/database';
 import { useAuth } from '../hooks/useAuth';
 import InvestmentCalculator from '../components/features/InvestmentCalculator';
