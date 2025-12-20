@@ -284,10 +284,6 @@ export default function PropertyAnalysisPage() {
       { id: 'description', label: 'Property Description', icon: Home },
       { id: 'worksheet', label: 'Purchase Worksheet', icon: Edit },
       { id: 'photos', label: 'Photos', icon: Image }
-    ]},
-    { title: 'ANALYSIS', items: [
-      { id: 'analysis', label: 'Property Analysis', icon: TrendingUp },
-      { id: 'projections', label: 'Buy & Hold Projections', icon: BarChart3 }
     ]}
   ];
 
