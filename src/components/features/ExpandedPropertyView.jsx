@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { X, Heart, Calculator, MapPin, Bed, Bath, Square, DollarSign, TrendingUp, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Heart, MapPin, Bed, Bath, Square, TrendingUp, AlertCircle, ExternalLink, Loader2, Building2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/database';
+import { saveProperty, unsaveProperty, isPropertySaved, updatePropertyWithRentData } from '../../services/database';
 import { useAuth } from '../../hooks/useAuth';
 import { getPropertyRentData } from '../../services/rentcastAPI';
 
 /**
  * ExpandedPropertyView - Floating modal for property quick analysis
  * 
- * NOW FETCHES REAL RENT FROM RENTCAST API
- * Falls back to formula estimate if API fails
+ * FIXED:
+ * - Uses RentCast API unit count (NOT bedroom estimation)
+ * - Properly calculates metrics using TOTAL rent
+ * - Shows correct source for unit detection
+ * - No Firebase calls without auth
  */
-const ExpandedPropertyView = ({ property, onClose }) => {
+const ExpandedPropertyView = ({ property, onClose, onRentDataLoaded }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [isSaved, setIsSaved] = useState(false);
@@ -31,6 +34,7 @@ const ExpandedPropertyView = ({ property, onClose }) => {
   const beds = property.description?.beds || property.beds || 0;
   const baths = property.description?.baths || property.baths || 0;
   const sqft = property.description?.sqft || property.sqft || 0;
+  const propertyType = property.description?.type || property.propertyType || '';
 
   // Get best available image
   const image = property.primary_photo?.href || 
@@ -38,70 +42,35 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                 property.thumbnail || 
                 'https://placehold.co/800x500/png?text=No+Image';
 
-  // Upgrade image quality if it's a Realty API image
+  // Upgrade image quality
   const getHighQualityImage = (url) => {
     if (!url) return 'https://placehold.co/800x500/png?text=No+Image';
-    
-    // Realty API images use rdcpix.com and can be resized
-    // Pattern: -m0xd-w{width}_h{height}_q{quality}
     if (url.includes('rdcpix.com') || url.includes('ap.rdcpix.com')) {
-      // Replace small dimensions with larger ones
-      return url
-        .replace(/-w\d+_h\d+/, '-w1024_h768')
-        .replace(/_q\d+/, '_q90');
+      return url.replace(/-w\d+_h\d+/, '-w1024_h768').replace(/_q\d+/, '_q90');
     }
     return url;
   };
 
   const highQualityImage = getHighQualityImage(image);
 
-  // ===== LOCAL RENT ESTIMATION (No API calls) =====
-  const estimateRent = (price, beds, sqft) => {
-    if (!price || price <= 0) return 0;
-    
-    // Rent-to-price ratio varies by price range (lower priced = higher ratio)
-    // This reflects real market behavior
-    let rentMultiplier;
-    if (price < 150000) rentMultiplier = 0.009;      // 0.9% for cheap properties
-    else if (price < 250000) rentMultiplier = 0.008; // 0.8%
-    else if (price < 400000) rentMultiplier = 0.007; // 0.7%
-    else if (price < 600000) rentMultiplier = 0.006; // 0.6%
-    else if (price < 1000000) rentMultiplier = 0.005; // 0.5%
-    else rentMultiplier = 0.004;                      // 0.4% for expensive
-    
-    let estimate = price * rentMultiplier;
-    
-    // Bedroom adjustments
-    if (beds >= 4) estimate *= 1.15;
-    else if (beds >= 3) estimate *= 1.08;
-    else if (beds <= 1) estimate *= 0.85;
-    
-    // Square footage adjustments
-    if (sqft > 2500) estimate *= 1.08;
-    else if (sqft > 2000) estimate *= 1.05;
-    else if (sqft < 1000) estimate *= 0.92;
-    
-    // Round to nearest $50
-    return Math.round(estimate / 50) * 50;
-  };
+  // ===== UNIT COUNT FROM RENTCAST API =====
+  const unitCount = rentData?.unitCount || 1;
+  const isMultiFamily = rentData?.isMultiFamily || unitCount > 1;
+  const unitSource = rentData?.unitCount ? 'RentCast API' : 'Default';
 
-  // Get actual rent - ONLY from RentCast API, NO formula fallback
-  const getActualRent = () => {
-    if (rentData?.rentEstimate) {
-      return rentData.rentEstimate;
-    }
-    return null; // Return null if no API data - don't use formula
-  };
+  // ===== RENT INFO FROM RENTCAST API =====
+  const perUnitRent = rentData?.rentEstimate || rentData?.perUnitRent || 0;
+  const totalMonthlyRent = rentData?.totalMonthlyRent || (perUnitRent * unitCount);
 
   // ===== INVESTMENT CALCULATIONS =====
-  const calculateQuickMetrics = () => {
-    // ONLY use RentCast API data
-    const rentEstimate = getActualRent();
-    
-    // If still loading or no API data, return null
-    if (!price || price <= 0 || !rentEstimate) {
+  const metrics = useMemo(() => {
+    // Must have price and rent data
+    if (!price || price <= 0 || !totalMonthlyRent || totalMonthlyRent <= 0) {
       return null;
     }
+
+    // Use TOTAL monthly rent for calculations
+    const rentEstimate = totalMonthlyRent;
 
     // Financing assumptions
     const downPaymentPercent = 0.20;
@@ -122,12 +91,12 @@ const ExpandedPropertyView = ({ property, onClose }) => {
       (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
       (Math.pow(1 + monthlyRate, numPayments) - 1);
 
-    // Monthly expenses
+    // Monthly expenses (based on TOTAL rent)
     const propertyTax = (price * 0.012) / 12;     // 1.2% annually
     const insurance = (price * 0.004) / 12;        // 0.4% annually
     const maintenance = rentEstimate * 0.05;       // 5% of rent
     const vacancy = rentEstimate * 0.05;           // 5% vacancy
-    const management = rentEstimate * 0.08;        // 8% management
+    const management = rentEstimate * 0.10;        // 10% management
 
     const totalMonthlyExpenses = monthlyMortgage + propertyTax + insurance + 
                                   maintenance + vacancy + management;
@@ -137,14 +106,17 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     const annualCashFlow = monthlyCashFlow * 12;
 
     // NOI (before debt service)
-    const annualNOI = (rentEstimate * 12) - ((propertyTax + insurance + maintenance + vacancy + management) * 12);
+    const operatingExpenses = (propertyTax + insurance + maintenance + vacancy + management) * 12;
+    const annualNOI = (rentEstimate * 12) - operatingExpenses;
 
     // Key metrics
     const capRate = (annualNOI / price) * 100;
     const cashOnCashROI = (annualCashFlow / totalCashInvested) * 100;
-    const grossYield = ((rentEstimate * 12) / price) * 100;
     const dscr = annualNOI / (monthlyMortgage * 12);
-    const grm = price / (rentEstimate * 12);
+    
+    // Per-unit metrics
+    const pricePerUnit = unitCount > 0 ? price / unitCount : price;
+    const cashFlowPerUnit = unitCount > 0 ? monthlyCashFlow / unitCount : monthlyCashFlow;
 
     return {
       rentEstimate,
@@ -153,14 +125,13 @@ const ExpandedPropertyView = ({ property, onClose }) => {
       annualCashFlow,
       capRate,
       cashOnCashROI,
-      grossYield,
       dscr,
-      grm,
       totalCashInvested,
-      // Rent source info
-      rentSource: rentData?.rentEstimate ? 'RentCast' : 'Formula',
-      rentRangeLow: rentData?.rentRangeLow || null,
-      rentRangeHigh: rentData?.rentRangeHigh || null,
+      // Per-unit metrics
+      pricePerUnit,
+      rentPerUnit: perUnitRent,
+      cashFlowPerUnit,
+      // Expense breakdown
       expenses: {
         mortgage: monthlyMortgage,
         propertyTax,
@@ -170,15 +141,15 @@ const ExpandedPropertyView = ({ property, onClose }) => {
         management
       }
     };
-  };
+  }, [price, totalMonthlyRent, unitCount, perUnitRent]);
 
   // Calculate investment score
-  const calculateScore = (metrics) => {
+  const scoreData = useMemo(() => {
     if (!metrics) return { score: 0, label: 'N/A', color: 'gray' };
 
-    let score = 50; // Base score
+    let score = 50;
 
-    // Cash flow scoring (most important)
+    // Cash flow scoring
     if (metrics.monthlyCashFlow >= 500) score += 25;
     else if (metrics.monthlyCashFlow >= 300) score += 20;
     else if (metrics.monthlyCashFlow >= 100) score += 10;
@@ -196,10 +167,8 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     else if (metrics.cashOnCashROI >= 8) score += 5;
     else if (metrics.cashOnCashROI < 4) score -= 10;
 
-    // Clamp score
     score = Math.max(0, Math.min(100, score));
 
-    // Determine label and color
     let label, color;
     if (score >= 80) { label = 'Excellent'; color = 'emerald'; }
     else if (score >= 65) { label = 'Good'; color = 'green'; }
@@ -208,15 +177,11 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     else { label = 'Poor'; color = 'red'; }
 
     return { score, label, color };
-  };
-
-  // Recalculate metrics when rentData changes
-  const metrics = React.useMemo(() => calculateQuickMetrics(), [price, beds, sqft, rentData]);
-  const scoreData = calculateScore(metrics);
+  }, [metrics]);
 
   // Formatters
   const formatPrice = (value) => {
-    if (!value) return 'N/A';
+    if (value === null || value === undefined || isNaN(value)) return 'N/A';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -225,15 +190,14 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     }).format(value);
   };
 
-  const formatCurrency = (value) => {
-    if (value === null || value === undefined || isNaN(value)) return 'N/A';
-    const sign = value >= 0 ? '+' : '';
-    return `${sign}${formatPrice(value)}`;
-  };
-
   const formatPercent = (value, decimals = 1) => {
     if (value === null || value === undefined || isNaN(value)) return 'N/A';
     return `${value.toFixed(decimals)}%`;
+  };
+
+  const formatNumber = (value, decimals = 2) => {
+    if (value === null || value === undefined || isNaN(value)) return 'N/A';
+    return value.toFixed(decimals);
   };
 
   // Fetch rent data from RentCast API
@@ -244,13 +208,23 @@ const ExpandedPropertyView = ({ property, onClose }) => {
       
       try {
         console.log('🏠 Fetching RentCast data for:', address);
+        
+        // Use the rent data function from rentcastAPI
         const data = await getPropertyRentData(property);
         
-        if (data && data.rentEstimate) {
-          console.log('✅ RentCast rent estimate:', data.rentEstimate);
+        if (data && (data.rentEstimate || data.perUnitRent)) {
+          console.log('✅ RentCast rent estimate (per unit):', data.rentEstimate || data.perUnitRent);
+          console.log('🏢 Property has', data.unitCount || 1, 'units');
+          console.log('💰 Total monthly rent:', data.totalMonthlyRent || data.rentEstimate);
+          
           setRentData(data);
+          
+          // Notify parent component
+          if (onRentDataLoaded) {
+            onRentDataLoaded(data);
+          }
         } else {
-          console.log('⚠️ No RentCast data available, using formula estimate');
+          console.log('⚠️ No RentCast data available');
           setRentError('No data available');
         }
       } catch (error) {
@@ -264,14 +238,22 @@ const ExpandedPropertyView = ({ property, onClose }) => {
     if (property) {
       fetchRentData();
     }
-  }, [property, address]);
+  }, [property]);
 
-  // Check if saved
+  // Check if saved - ONLY if user is logged in
   useEffect(() => {
     const checkSaved = async () => {
-      if (currentUser && property.property_id) {
+      // IMPORTANT: Only check if user is logged in
+      if (!currentUser?.uid || !property.property_id) {
+        return;
+      }
+      
+      try {
         const saved = await isPropertySaved(currentUser.uid, property.property_id);
         setIsSaved(saved);
+      } catch (error) {
+        // Silently fail - don't spam console
+        console.log('Could not check saved status');
       }
     };
     checkSaved();
@@ -298,8 +280,10 @@ const ExpandedPropertyView = ({ property, onClose }) => {
         baths,
         sqft,
         thumbnail: image,
-        rentEstimate: metrics?.rentEstimate || 0,
-        rentSource: 'estimate', // Mark as formula estimate
+        rentEstimate: totalMonthlyRent,
+        rentSource: 'RentCast',
+        unitCount: unitCount,
+        isMultiFamily: isMultiFamily,
         metrics: metrics ? {
           capRate: metrics.capRate,
           cashOnCashROI: metrics.cashOnCashROI,
@@ -337,15 +321,21 @@ const ExpandedPropertyView = ({ property, onClose }) => {
       sqft,
       thumbnail: highQualityImage,
       photos: property.photos,
-      // Pass RentCast data if available
-      rentEstimate: rentData?.rentEstimate || metrics?.rentEstimate || 0,
+      // Pass RentCast data
+      rentEstimate: perUnitRent,
+      totalMonthlyRent: totalMonthlyRent,
       rentRangeLow: rentData?.rentRangeLow || null,
       rentRangeHigh: rentData?.rentRangeHigh || null,
       rentComparables: rentData?.comparables || [],
-      rentSource: rentData?.rentEstimate ? 'RentCast' : 'estimate',
+      rentSource: 'RentCast',
+      // Unit info FROM RENTCAST API
+      unitCount: unitCount,
+      isMultiFamily: isMultiFamily,
+      unitSource: unitSource,
+      // Property details
       yearBuilt: property.description?.year_built || property.yearBuilt,
       lotSize: property.description?.lot_sqft || property.lotSize,
-      propertyType: property.description?.type || property.propertyType || 'single_family'
+      propertyType: propertyType || 'single_family'
     };
 
     navigate(`/property/${property.property_id}/analyze`, {
@@ -356,12 +346,12 @@ const ExpandedPropertyView = ({ property, onClose }) => {
   // Score color classes
   const getScoreColorClasses = (color) => {
     const colors = {
-      emerald: { bg: 'bg-emerald-100', text: 'text-emerald-700', ring: 'ring-emerald-500' },
-      green: { bg: 'bg-green-100', text: 'text-green-700', ring: 'ring-green-500' },
-      yellow: { bg: 'bg-yellow-100', text: 'text-yellow-700', ring: 'ring-yellow-500' },
-      orange: { bg: 'bg-orange-100', text: 'text-orange-700', ring: 'ring-orange-500' },
-      red: { bg: 'bg-red-100', text: 'text-red-700', ring: 'ring-red-500' },
-      gray: { bg: 'bg-gray-100', text: 'text-gray-700', ring: 'ring-gray-500' }
+      emerald: { bg: 'bg-emerald-500', text: 'text-white' },
+      green: { bg: 'bg-green-500', text: 'text-white' },
+      yellow: { bg: 'bg-yellow-500', text: 'text-white' },
+      orange: { bg: 'bg-orange-500', text: 'text-white' },
+      red: { bg: 'bg-red-500', text: 'text-white' },
+      gray: { bg: 'bg-gray-400', text: 'text-white' }
     };
     return colors[color] || colors.gray;
   };
@@ -401,9 +391,19 @@ const ExpandedPropertyView = ({ property, onClose }) => {
           />
           
           {/* Score Badge */}
-          <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg ${scoreColors.bg} ${scoreColors.text} font-bold`}>
-            {scoreData.score} - {scoreData.label}
+          <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg ${scoreColors.bg} ${scoreColors.text} font-bold flex items-center gap-2`}>
+            <span className="text-xl">{scoreData.score}</span>
+            <span className="text-sm">{scoreData.label}</span>
+            {rentData && <span className="text-xs opacity-75">✓ Verified</span>}
           </div>
+
+          {/* Unit Count Badge */}
+          {isMultiFamily && (
+            <div className="absolute top-4 right-14 px-3 py-1.5 rounded-lg bg-purple-600 text-white font-bold flex items-center gap-1">
+              <Building2 className="w-4 h-4" />
+              {unitCount} Units
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -414,12 +414,13 @@ const ExpandedPropertyView = ({ property, onClose }) => {
               <h2 className="text-2xl font-bold text-gray-900">{formatPrice(price)}</h2>
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !currentUser}
                 className={`p-2 rounded-lg transition-colors ${
                   isSaved 
                     ? 'bg-red-100 text-red-600' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                } ${!currentUser ? 'opacity-50' : ''}`}
+                title={!currentUser ? 'Sign in to save properties' : ''}
               >
                 <Heart className="w-5 h-5" fill={isSaved ? 'currentColor' : 'none'} />
               </button>
@@ -435,6 +436,11 @@ const ExpandedPropertyView = ({ property, onClose }) => {
               <span className="flex items-center gap-1">
                 <Square className="w-4 h-4" /> {sqft.toLocaleString()} sqft
               </span>
+              {isMultiFamily && (
+                <span className="flex items-center gap-1 text-purple-600 font-medium">
+                  <Building2 className="w-4 h-4" /> {unitCount} units
+                </span>
+              )}
             </div>
 
             <p className="text-gray-600 flex items-center gap-1">
@@ -443,9 +449,8 @@ const ExpandedPropertyView = ({ property, onClose }) => {
             </p>
           </div>
 
-          {/* Rent Data Section - API ONLY */}
+          {/* Rent Data Section */}
           {rentLoading ? (
-            // LOADING STATE
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -455,50 +460,70 @@ const ExpandedPropertyView = ({ property, onClose }) => {
                     <span className="text-gray-600">Fetching from RentCast API...</span>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-600 text-xs font-medium rounded-full">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Loading
-                </span>
               </div>
             </div>
-          ) : rentData?.rentEstimate ? (
-            // SUCCESS STATE - API data available
+          ) : rentData ? (
             <div className="space-y-4">
               {/* Rent Banner */}
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-green-600">Monthly Rent</p>
-                    <p className="text-2xl font-bold text-green-700">
-                      {formatPrice(rentData.rentEstimate)}
-                    </p>
-                    {rentData.rentRangeLow && rentData.rentRangeHigh && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Range: {formatPrice(rentData.rentRangeLow)} - {formatPrice(rentData.rentRangeHigh)}
-                      </p>
-                    )}
-                  </div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-green-600">
+                    Monthly Rent {isMultiFamily ? '(Per Unit)' : ''}
+                  </p>
                   <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
                     <TrendingUp className="w-3 h-3" />
-                    RentCast API
+                    ✓ RentCast
                   </span>
                 </div>
-                {rentData.comparables?.length > 0 && (
-                  <p className="text-xs text-green-600 mt-2">
-                    Based on {rentData.comparables.length} comparable rentals nearby
+                <p className="text-2xl font-bold text-green-700">
+                  {formatPrice(perUnitRent)}
+                </p>
+                {rentData.rentRangeLow && rentData.rentRangeHigh && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Range: {formatPrice(rentData.rentRangeLow)} - {formatPrice(rentData.rentRangeHigh)}
                   </p>
+                )}
+                
+                {/* Total rent for multi-family */}
+                {isMultiFamily && (
+                  <div className="mt-3 pt-3 border-t border-green-200">
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-600">
+                        Total Monthly Rent ({unitCount} units):
+                      </span>
+                      <span className="text-xl font-bold text-green-700">
+                        {formatPrice(totalMonthlyRent)}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* Key Metrics Grid - Only show when we have API data */}
-              {metrics && (
+              {/* Multi-family info notice - FIXED: Shows correct source */}
+              {isMultiFamily && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-purple-700">
+                    <strong>Multi-Family Property:</strong> {unitCount} units detected from {unitSource}. 
+                    You can adjust the unit count in the full analysis.
+                  </p>
+                </div>
+              )}
+
+              {/* Key Metrics Grid */}
+              {metrics ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Monthly Cash Flow</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Total Cash Flow</p>
                       <p className={`text-lg font-bold ${metrics.monthlyCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(metrics.monthlyCashFlow)}
+                        {formatPrice(metrics.monthlyCashFlow)}/mo
                       </p>
+                      {isMultiFamily && (
+                        <p className="text-xs text-gray-500">
+                          {formatPrice(metrics.cashFlowPerUnit)}/unit
+                        </p>
+                      )}
                     </div>
                     
                     <div className="bg-gray-50 rounded-lg p-3">
@@ -508,68 +533,67 @@ const ExpandedPropertyView = ({ property, onClose }) => {
 
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide">Cash-on-Cash ROI</p>
-                      <p className="text-lg font-bold text-gray-900">{formatPercent(metrics.cashOnCashROI)}</p>
+                      <p className={`text-lg font-bold ${metrics.cashOnCashROI >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                        {formatPercent(metrics.cashOnCashROI)}
+                      </p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500 uppercase tracking-wide">DSCR</p>
-                      <p className="text-lg font-bold text-gray-900">{metrics.dscr.toFixed(2)}x</p>
+                      <p className={`text-lg font-bold ${metrics.dscr >= 1.0 ? 'text-gray-900' : 'text-red-600'}`}>
+                        {formatNumber(metrics.dscr)}x
+                      </p>
                     </div>
                   </div>
 
-                  {/* Monthly Expenses */}
-                  <div className="border-t pt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Monthly Expenses</p>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-gray-500">Mortgage</p>
-                        <p className="font-semibold">{formatPrice(metrics.expenses.mortgage)}</p>
-                      </div>
-                      <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-gray-500">Taxes</p>
-                        <p className="font-semibold">{formatPrice(metrics.expenses.propertyTax)}</p>
-                      </div>
-                      <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-gray-500">Insurance</p>
-                        <p className="font-semibold">{formatPrice(metrics.expenses.insurance)}</p>
+                  {/* Per-Unit Metrics for Multi-Family */}
+                  {isMultiFamily && (
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-purple-700 mb-2 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        Per Unit Metrics
+                      </p>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div className="text-center">
+                          <p className="text-purple-600">Price/Unit</p>
+                          <p className="font-bold">{formatPrice(metrics.pricePerUnit)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-purple-600">Rent/Unit</p>
+                          <p className="font-bold">{formatPrice(metrics.rentPerUnit)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-purple-600">Cash Flow/Unit</p>
+                          <p className={`font-bold ${metrics.cashFlowPerUnit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatPrice(metrics.cashFlowPerUnit)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-700">
+                    Unable to calculate metrics. Click "Full Analysis" for detailed calculations.
+                  </p>
+                </div>
               )}
-
-              {/* Success Notice */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
-                <TrendingUp className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-green-700">
-                  <strong>Market Rent:</strong> Based on {rentData.comparables?.length || 'comparable'} similar rentals in the area via RentCast API.
-                </p>
-              </div>
             </div>
           ) : (
-            // ERROR STATE - API failed or no data
-            <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-red-600">Rent Data Unavailable</p>
-                    <p className="text-gray-600 mt-1 text-sm">
-                      Unable to fetch rent data from RentCast API
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-600 text-xs font-medium rounded-full">
-                    <AlertCircle className="w-3 h-3" />
-                    Unavailable
-                  </span>
+            // Error state
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-red-600">Rent Data Unavailable</p>
+                  <p className="text-gray-600 mt-1 text-sm">
+                    {rentError || 'Unable to fetch rent data from RentCast API'}
+                  </p>
                 </div>
-              </div>
-
-              {/* Error Notice */}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-700">
-                  <strong>Note:</strong> Rent data could not be retrieved. Click "Full Analysis" to try again or enter rent manually.
-                </p>
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-600 text-xs font-medium rounded-full">
+                  <AlertCircle className="w-3 h-3" />
+                  Unavailable
+                </span>
               </div>
             </div>
           )}

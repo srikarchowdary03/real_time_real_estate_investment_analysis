@@ -10,7 +10,8 @@ import PropertyDetails from '../pages/PropertyDetails';
 import PropertyAnalysisPage from '../pages/PropertyAnalysisPage';
 import SignIn from '../pages/Auth/SignIn';
 
-// Optional pages - only include if they exist
+// User Pages
+import InvestorProfile from '../pages/InvestorProfile';
 import Dashboard from '../pages/Dashboard';
 import Profile from '../pages/Profile';
 import Settings from '../pages/Settings';
@@ -20,15 +21,15 @@ import Settings from '../pages/Settings';
  * 
  * Route Structure:
  * / - Home page with search
- * /properties - Property search results (requires query params)
- * /properties?zip=XXXXX - Search by ZIP code
- * /properties?city=XXX&state=XX - Search by city/state
- * /properties?search=XXXX - Search by text
- * /property/:id - Property details page
- * /property/:propertyId/analyze - Full investment analysis
+ * /properties - Property search results
+ * /property/:id - Property details page (brief view)
+ * /property/:propertyId/analyze - Full investment analysis (DealCheck-style)
  * /my-properties - Saved properties (requires auth)
+ * /investor-profile - Investor profile & scoring settings
+ * /dashboard - User dashboard
+ * /profile - User account profile
+ * /settings - App settings
  * /signin - Authentication
- * /signup - Registration (redirects to signin)
  */
 
 const router = createBrowserRouter([
@@ -48,13 +49,13 @@ const router = createBrowserRouter([
         element: <Properties />,
       },
       
-      // Property Details
+      // Property Details (brief view)
       {
         path: 'property/:id',
         element: <PropertyDetails />,
       },
       
-      // Investment Analysis Page
+      // Investment Analysis Page (DealCheck-style with sidebar)
       {
         path: 'property/:propertyId/analyze',
         element: <PropertyAnalysisPage />,
@@ -64,6 +65,30 @@ const router = createBrowserRouter([
       {
         path: 'my-properties',
         element: <MyProperties />,
+      },
+      
+      // Investor Profile & Scoring Settings
+      {
+        path: 'investor-profile',
+        element: <InvestorProfile />,
+      },
+      
+      // Dashboard
+      {
+        path: 'dashboard',
+        element: <Dashboard />,
+      },
+      
+      // User Profile/Account
+      {
+        path: 'profile',
+        element: <Profile />,
+      },
+      
+      // Settings
+      {
+        path: 'settings',
+        element: <Settings />,
       },
       
       // Authentication

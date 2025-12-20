@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, ArrowUpDown, Heart, Calculator, Trash2, TrendingUp, DollarSign } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Heart, Calculator, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { getSavedProperties, unsaveProperty } from '../services/database';
 
@@ -58,7 +58,7 @@ const MyProperties = () => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'newest':
-          return b.createdAt?.seconds - a.createdAt?.seconds;
+          return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
         case 'price-high':
           return (b.propertyData?.price || 0) - (a.propertyData?.price || 0);
         case 'price-low':
@@ -114,6 +114,15 @@ const MyProperties = () => {
       unknown: { label: 'No Data', icon: '⚪', bg: 'bg-gray-100', text: 'text-gray-800' }
     };
     return badges[score] || badges.unknown;
+  };
+
+  // Get thumbnail from multiple possible sources
+  const getThumbnail = (property) => {
+    return property.thumbnail ||
+           property.photos?.[0]?.href ||
+           property.photos?.[0] ||
+           property.propertyData?.primaryPhoto ||
+           'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
   };
 
   if (loading) {
@@ -229,10 +238,13 @@ const MyProperties = () => {
                 {/* Image */}
                 <div className="relative h-48 bg-gray-200">
                   <img
-                    src={property.propertyData?.primaryPhoto || 'https://via.placeholder.com/400x300'}
-                    alt={property.propertyData?.address}
+                    src={getThumbnail(property)}
+                    alt={property.propertyData?.address || 'Property'}
                     className="w-full h-full object-cover"
-                    onError={(e) => e.target.src = 'https://via.placeholder.com/400x300'}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
+                    }}
                   />
                   
                   {/* Score Badge */}
@@ -269,7 +281,7 @@ const MyProperties = () => {
                         </span>
                       </div>
                       
-                      {property.estimatedCashFlow !== null && (
+                      {property.estimatedCashFlow !== null && property.estimatedCashFlow !== undefined && (
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-gray-600">Cash Flow</span>
                           <span className={`font-semibold ${
@@ -320,7 +332,7 @@ const MyProperties = () => {
                       state: { 
                         propertyData: {
                           property_id: property.propertyId,
-                          zillowData: { rent: property.rentEstimate },
+                          rentCastData: property.rentCastData || { rentEstimate: property.rentEstimate },
                           price: property.propertyData?.price,
                           address: property.propertyData?.address,
                           city: property.propertyData?.city,
@@ -329,6 +341,9 @@ const MyProperties = () => {
                           beds: property.propertyData?.beds,
                           baths: property.propertyData?.baths,
                           sqft: property.propertyData?.sqft,
+                          thumbnail: property.thumbnail,
+                          photos: property.photos,
+                          detectedUnits: property.unitCount || 1,
                         }
                       }
                     })}

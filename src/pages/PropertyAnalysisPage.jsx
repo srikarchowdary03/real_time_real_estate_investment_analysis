@@ -1,394 +1,485 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-
-// ✅ CORRECT PATH: Use your original import path
-import { db } from '../config/firebase';
-
-// ✅ RentCast API for accurate rent estimates on analysis page
-import { getPropertyRentData } from '../services/rentcastAPI';
-import { saveProperty, isPropertySaved } from '../services/database';
+import { 
+  Home, Edit, Image, TrendingUp, BarChart3, 
+  Share2, Trash2, ArrowLeft, Check, Loader2,
+  Building
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import PropertySidebar from '../components/analysis/PropertySidebar';
+import { 
+  saveProperty, unsaveProperty, isPropertySaved, getSavedProperty
+} from '../services/database';
+import { getInvestorProfile, getFinancingDefaults, getExpenseDefaults } from '../services/Investorservice';
+import { estimateRent, detectMultiFamily } from '../utils/investmentCalculations';
+
+// Section Components
 import PropertyAnalysisContent from '../components/analysis/PropertyAnalysisContent';
 import PurchaseWorksheet from '../components/analysis/PurchaseWorksheet';
 import BuyHoldProjections from '../components/analysis/Buyholdprojections';
-import PropertyDescription from '../components/analysis/PropertyDescription';
-import PropertyPhotos from '../components/analysis/PropertyPhotos';
 
 export default function PropertyAnalysisPage() {
   const { propertyId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const [property, setProperty] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState('analysis');
-  const [isSaved, setIsSaved] = useState(false);
   
-  const [inputs, setInputs] = useState(null);
+  const [property, setProperty] = useState(location.state?.propertyData || location.state?.property || null);
+  const [loading, setLoading] = useState(!location.state?.propertyData && !location.state?.property);
+  const [isSaved, setIsSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [investorProfile, setInvestorProfile] = useState(null);
+  const [activeSection, setActiveSection] = useState('analysis');
+  const [inputs, setInputs] = useState({});
   const [results, setResults] = useState(null);
 
-  // Auto-save property to favorites when analysis page opens
-  const autoSaveProperty = async (propertyData) => {
-    if (!currentUser) {
-      console.log('⚠️ User not logged in, skipping auto-save');
-      return;
+  // DETECT MULTI-FAMILY
+  const multiFamily = useMemo(() => {
+    if (!property) return { isMultiFamily: false, units: 1 };
+    if (property.detectedUnits) {
+      return { isMultiFamily: property.detectedUnits > 1, units: property.detectedUnits };
     }
+    return detectMultiFamily(property);
+  }, [property]);
 
-    try {
-      // Check if already saved
-      const alreadySaved = await isPropertySaved(currentUser.uid, propertyData.property_id || propertyId);
-      
-      if (alreadySaved) {
-        console.log('✅ Property already saved to favorites');
-        setIsSaved(true);
+  const units = multiFamily.units;
+
+  // Load investor profile
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (currentUser) {
+        try {
+          const profile = await getInvestorProfile(currentUser.uid);
+          setInvestorProfile(profile);
+        } catch (error) {
+          console.error('Error loading investor profile:', error);
+        }
+      }
+    };
+    loadProfile();
+  }, [currentUser]);
+
+  // Load property from database if not in navigation state
+  useEffect(() => {
+    const loadProperty = async () => {
+      if (!property && propertyId && currentUser) {
+        try {
+          setLoading(true);
+          const savedProp = await getSavedProperty(currentUser.uid, propertyId);
+          if (savedProp) {
+            const flatProperty = {
+              property_id: savedProp.propertyId,
+              ...savedProp.propertyData,
+              rentCastData: savedProp.rentCastData,
+              scoreData: savedProp.scoreData,
+              thumbnail: savedProp.thumbnail,
+              photos: savedProp.photos
+            };
+            setProperty(flatProperty);
+            setIsSaved(true);
+          }
+        } catch (error) {
+          console.error('Error loading property:', error);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
+    };
+    loadProperty();
+  }, [propertyId, currentUser, property]);
+
+  // Auto-save property when page opens
+  useEffect(() => {
+    const autoSaveProperty = async () => {
+      if (!currentUser || !property?.property_id) {
+        console.log('⚠️ Cannot auto-save: missing user or property_id');
         return;
       }
-
-      // Prepare property data for saving
-      const saveData = {
-        property_id: propertyData.property_id || propertyId,
-        address: propertyData.address || propertyData.location?.address?.line || '',
-        city: propertyData.city || propertyData.location?.address?.city || '',
-        state: propertyData.state || propertyData.location?.address?.state_code || '',
-        zip: propertyData.zipCode || propertyData.zip || propertyData.location?.address?.postal_code || '',
-        price: propertyData.price || propertyData.list_price || 0,
-        beds: propertyData.beds || propertyData.description?.beds || 0,
-        baths: propertyData.baths || propertyData.description?.baths || 0,
-        sqft: propertyData.sqft || propertyData.description?.sqft || 0,
-        thumbnail: propertyData.thumbnail || propertyData.primary_photo?.href || propertyData.photos?.[0]?.href || '',
-        rentEstimate: propertyData.rentEstimate || 0,
-        rentSource: propertyData.rentSource || 'estimate'
-      };
-
-      console.log('💾 Auto-saving property to favorites:', saveData.address);
-      await saveProperty(currentUser.uid, saveData);
-      setIsSaved(true);
-      console.log('✅ Property auto-saved to favorites');
-    } catch (error) {
-      console.error('❌ Error auto-saving property:', error);
-    }
-  };
-
-  useEffect(() => {
-    const loadPropertyData = async () => {
-      if (location.state?.propertyData) {
-        console.log('🏠 Property data from navigation:', location.state.propertyData);
-        const propertyData = location.state.propertyData;
-        
-        // Check if we already have rent estimate
-        let rentEstimate = propertyData.rentEstimate || 
-                          propertyData.enrichedData?.rentEstimate || 
-                          propertyData.zillowData?.rent || 0;
-        
-        // If no rent estimate, fetch from RentCast API
-        if (!rentEstimate || rentEstimate === 0) {
-          console.log('📡 No rent estimate found, fetching from RentCast...');
-          const rentData = await getPropertyRentData(propertyData);
-          
-          if (rentData?.rentEstimate) {
-            rentEstimate = rentData.rentEstimate;
-            console.log('✅ RentCast rent estimate:', rentEstimate);
-            
-            // Enrich property with RentCast data
-            propertyData.rentEstimate = rentEstimate;
-            propertyData.rentRangeLow = rentData.rentRangeLow;
-            propertyData.rentRangeHigh = rentData.rentRangeHigh;
-            propertyData.rentComparables = rentData.comparables;
-            propertyData.rentSource = 'RentCast';
-          }
-        } else {
-          console.log('✅ Using existing rent estimate:', rentEstimate);
+      
+      try {
+        const alreadySaved = await isPropertySaved(currentUser.uid, property.property_id);
+        if (alreadySaved) {
+          setIsSaved(true);
+          console.log('✅ Property already saved');
+          return;
         }
         
-        setProperty(propertyData);
-        initializeInputs(propertyData);
+        // Build property data for saving
+        const propertyData = {
+          property_id: property.property_id,
+          address: property.address || property.location?.address?.line || '',
+          city: property.city || property.location?.address?.city || '',
+          state: property.state || property.location?.address?.state_code || '',
+          zip: property.zipCode || property.zip || property.location?.address?.postal_code || '',
+          price: property.price || property.list_price || 0,
+          beds: property.beds || property.description?.beds || 0,
+          baths: property.baths || property.description?.baths || 0,
+          sqft: property.sqft || property.description?.sqft || 0,
+          thumbnail: property.thumbnail || property.primary_photo?.href || '',
+          propertyType: property.propertyType || property.description?.type || '',
+          units: units
+        };
         
-        // Auto-save to favorites
-        await autoSaveProperty(propertyData);
-        
-        setLoading(false);
-      } else {
-        fetchProperty();
+        console.log('💾 Auto-saving property:', propertyData.address);
+        await saveProperty(currentUser.uid, propertyData, property.rentCastData || null, null);
+        setIsSaved(true);
+        console.log('✅ Property auto-saved successfully');
+      } catch (error) {
+        console.error('❌ Error auto-saving property:', error);
       }
     };
     
-    loadPropertyData();
-  }, [propertyId, location.state, currentUser]);
+    autoSaveProperty();
+  }, [currentUser, property, units]);
 
-  const initializeInputs = (propertyData) => {
-    // ✅ FIXED: Extract rent estimate from multiple possible locations
-    let monthlyRent = 0;
+  // Initialize inputs - HANDLES MULTI-FAMILY RENT CORRECTLY
+  useEffect(() => {
+    if (!property) return;
+
+    const financingDefaults = investorProfile ? getFinancingDefaults(investorProfile) : {};
+    const expenseDefaults = investorProfile ? getExpenseDefaults(investorProfile) : {};
+
+    const price = property.price || property.list_price || property.propertyData?.price || 0;
+    const sqft = property.sqft || property.description?.sqft || property.propertyData?.sqft || 1000;
+    const beds = property.beds || property.description?.beds || property.propertyData?.beds || 0;
     
-    if (propertyData.rentEstimate) {
-      monthlyRent = propertyData.rentEstimate;
-      console.log('✅ Found rentEstimate at top level:', monthlyRent);
-    } else if (propertyData.enrichedData?.rentEstimate) {
-      monthlyRent = propertyData.enrichedData.rentEstimate;
-      console.log('✅ Found rentEstimate in enrichedData:', monthlyRent);
-    } else if (propertyData.zillowData?.rent) {
-      monthlyRent = propertyData.zillowData.rent;
-      console.log('✅ Found rent in zillowData:', monthlyRent);
-    } else if (propertyData.zillowData?.rentEstimate) {
-      monthlyRent = propertyData.zillowData.rentEstimate;
-      console.log('✅ Found rentEstimate in zillowData:', monthlyRent);
-    }
-    
-    console.log('💰 Monthly rent being used:', monthlyRent);
-    console.log('📈 Annual gross rents:', monthlyRent * 12);
+    const rentPerUnit = property.rentCastData?.rentEstimate || 
+                        property.rentEstimate || 
+                        estimateRent(price / units, beds / units, sqft / units);
 
-    // Initialize with defaults matching Excel spreadsheet
-    const defaultInputs = {
-      // Property Info
-      fairMarketValue: propertyData.price || 0,
-      vacancyRate: 5.0,
-      managementRate: 10.0,
-      advertisingCost: 100,
-      numberOfUnits: propertyData.beds || 1,
-      appreciationRate: 3.0,
-      incomeGrowthRate: 2.0,
-      expenseGrowthRate: 2.0,
-      sellingCosts: 6.0,
+    const totalAnnualRent = rentPerUnit * units * 12;
 
-      // Purchase Info
-      offerPrice: propertyData.price || 0,
-      purchaseCostsTotal: 0,
-      purchaseCostsPercent: 0,
+    console.log('🏢 Multi-family detection:', multiFamily);
+    console.log('💰 Rent per unit:', rentPerUnit);
+    console.log('💰 Total annual rent:', totalAnnualRent);
+
+    setInputs({
+      fairMarketValue: price,
+      sqft: sqft,
+      numberOfUnits: units,
+      offerPrice: price,
       repairs: 0,
       repairsContingency: 0,
+      purchaseCostsPercent: financingDefaults.closingCostsPercent || 3,
       lenderFee: 0,
       brokerFee: 0,
       environmentals: 0,
-      inspections: 0,
-      appraisals: 0,
+      inspections: 500,
+      appraisals: 500,
       misc: 0,
       transferTax: 0,
-      legal: 0,
-
-      itemizedPurchaseCosts: [],
-      itemizedRehabCosts: [],
-
-      // Financing
-      firstMtgLTV: 80,
-      firstMtgRate: 7.0,
-      firstMtgAmortization: 30,
+      legal: 500,
+      firstMtgLTV: 100 - (financingDefaults.downPaymentPercent || 20),
+      firstMtgRate: financingDefaults.interestRate || 7.0,
+      firstMtgAmortization: financingDefaults.loanTermYears || 30,
       firstMtgCMHCFee: 0,
       secondMtgPrincipal: 0,
-      secondMtgRate: 12.0,
-      secondMtgAmortization: 9999,
+      secondMtgRate: 12,
+      secondMtgAmortization: 30,
       interestOnlyPrincipal: 0,
       interestOnlyRate: 0,
       otherMonthlyFinancingCosts: 0,
-
-      // Income Annual - ✅ USES EXTRACTED RENT
-      grossRents: monthlyRent * 12,
+      grossRents: totalAnnualRent,
       parking: 0,
       storage: 0,
       laundry: 0,
       otherIncome: 0,
-
-      // Operating Expenses Annual
-      propertyTaxes: propertyData.zillowData?.taxData?.annualAmount || 
-                     propertyData.enrichedData?.taxData?.annualAmount || 0,
-      insurance: propertyData.zillowData?.insurance?.annual || 0,
-      repairsPercent: 5.0,
+      vacancyRate: expenseDefaults.vacancyRate || 5,
+      managementRate: expenseDefaults.managementRate || 8,
+      repairsPercent: expenseDefaults.maintenanceRate || 5,
+      propertyTaxes: Math.round(price * (expenseDefaults.propertyTaxRate || 1.2) / 100),
+      insurance: Math.round(price * (expenseDefaults.insuranceRate || 0.5) / 100),
       electricity: 0,
       gas: 0,
       lawnMaintenance: 0,
       waterSewer: 0,
       cable: 0,
       caretaking: 0,
-      advertising: 0,
+      advertising: 100,
       associationFees: 0,
       pestControl: 0,
       security: 0,
       trashRemoval: 0,
       miscellaneous: 0,
       commonArea: 0,
-      capitalImprovements: 0,
+      capitalImprovements: Math.round(totalAnnualRent * (expenseDefaults.capExRate || 5) / 100),
       accounting: 0,
       legalExpenses: 0,
       badDebts: 0,
       otherExpenses: 0,
       evictions: 0,
-
-      // Cash Requirements
+      appreciationRate: 3.0,
+      incomeGrowthRate: 2.0,
+      expenseGrowthRate: 2.0,
+      sellingCosts: 6.0,
+      holdingPeriod: 5,
       deposits: 0,
-      lessProRation: 0,
-
-      // Additional fields
-      depreciationPeriod: 27.5,
-      landValue: 0,
-      sqft: propertyData.sqft || 1050
-    };
-
-    console.log('✅ Initialized inputs with gross rents:', defaultInputs.grossRents);
-    setInputs(defaultInputs);
-  };
-
-  const fetchProperty = async () => {
-    try {
-      let docRef, docSnap;
-      
-      if (currentUser) {
-        const fullDocId = `${currentUser.uid}_${propertyId}`;
-        docRef = doc(db, 'savedProperties', fullDocId);
-        docSnap = await getDoc(docRef);
-      }
-      
-      if (!docSnap?.exists()) {
-        docRef = doc(db, 'savedProperties', propertyId);
-        docSnap = await getDoc(docRef);
-      }
-      
-      if (docSnap?.exists()) {
-        const data = docSnap.data();
-        console.log('📁 Fetched property from Firebase:', data);
-        
-        const propertyData = {
-          property_id: data.propertyId || propertyId,
-          price: data.propertyData?.price || 0,
-          address: data.propertyData?.address || '',
-          city: data.propertyData?.city || '',
-          state: data.propertyData?.state || '',
-          zipCode: data.propertyData?.zipCode || '',
-          beds: data.propertyData?.beds || 0,
-          baths: data.propertyData?.baths || 0,
-          sqft: data.propertyData?.sqft || 0,
-          rentEstimate: data.rentEstimate,
-          zillowData: {
-            rent: data.rentEstimate,
-            rentEstimate: data.rentEstimate,
-            photos: data.photos,
-            taxData: { annualAmount: data.annualTaxAmount }
-          },
-          enrichedData: {
-            rentEstimate: data.rentEstimate,
-            photos: data.photos
-          },
-          photos: data.photos || []
-        };
-        
-        // If no rent estimate in Firebase, fetch from RentCast
-        if (!propertyData.rentEstimate) {
-          console.log('📡 No rent in Firebase, fetching from RentCast...');
-          const rentData = await getPropertyRentData(propertyData);
-          
-          if (rentData?.rentEstimate) {
-            propertyData.rentEstimate = rentData.rentEstimate;
-            propertyData.rentRangeLow = rentData.rentRangeLow;
-            propertyData.rentRangeHigh = rentData.rentRangeHigh;
-            propertyData.rentSource = 'RentCast';
-            console.log('✅ RentCast rent estimate:', rentData.rentEstimate);
-          }
-        }
-        
-        setProperty(propertyData);
-        initializeInputs(propertyData);
-        
-        // Auto-save to favorites (property already exists in Firebase, just mark as saved)
-        setIsSaved(true);
-      } else {
-        console.warn('Property not found, redirecting...');
-        navigate('/properties');
-      }
-    } catch (error) {
-      console.error('Error fetching property:', error);
-      navigate('/properties');
-    } finally {
-      setLoading(false);
-    }
-  };
+      lessProRation: 0
+    });
+  }, [property, investorProfile, units, multiFamily]);
 
   const handleInputChange = (field, value) => {
-    setInputs(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setInputs(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = async () => {
-    if (!currentUser || !inputs) return;
-    
+  // Handle unsave (remove from saved)
+  const handleUnsave = async () => {
+    if (!currentUser || !property?.property_id) return;
+
+    setSaving(true);
     try {
-      const analysisRef = doc(db, 'propertyAnalyses', propertyId);
-      await setDoc(analysisRef, {
-        propertyId: propertyId,
-        userId: currentUser.uid,
-        inputs,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-      
-      alert('Analysis saved successfully!');
+      await unsaveProperty(currentUser.uid, property.property_id);
+      setIsSaved(false);
+      console.log('✅ Property removed from saved');
     } catch (error) {
-      console.error('Error saving analysis:', error);
-      alert('Failed to save analysis');
+      console.error('❌ Error removing property:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading || !inputs) {
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Link copied to clipboard!');
+  };
+
+  const handleBack = () => navigate(-1);
+  const handleResultsChange = (newResults) => setResults(newResults);
+
+  const formatPrice = (price) => {
+    if (!price) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD',
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    }).format(price);
+  };
+
+  const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
+    return `${value.toFixed(1)}%`;
+  };
+
+  // Extract property details
+  const address = property?.address || property?.location?.address?.line || property?.propertyData?.address || 'N/A';
+  const city = property?.city || property?.location?.address?.city || property?.propertyData?.city || '';
+  const state = property?.state || property?.location?.address?.state_code || property?.propertyData?.state || '';
+  const zipCode = property?.zipCode || property?.zip || property?.location?.address?.postal_code || '';
+  const price = property?.price || property?.list_price || property?.propertyData?.price || 0;
+  const beds = property?.beds || property?.description?.beds || property?.propertyData?.beds || 0;
+  const baths = property?.baths || property?.description?.baths || property?.propertyData?.baths || 0;
+  const sqft = property?.sqft || property?.description?.sqft || property?.propertyData?.sqft || 0;
+  
+  const image = useMemo(() => {
+    const sources = [property?.primary_photo?.href, property?.primaryPhoto, property?.photos?.[0]?.href, property?.thumbnail];
+    return sources.find(url => url && typeof url === 'string') || 'https://placehold.co/400x300/e5e7eb/6b7280?text=No+Image';
+  }, [property]);
+
+  const rentPerUnit = property?.rentCastData?.rentEstimate || inputs.grossRents / units / 12 || 0;
+  const rentSource = property?.rentCastData?.rentEstimate ? 'RentCast' : 'Estimate';
+  const capRate = results?.quickAnalysis?.capRateOnPP || 0;
+
+  const menuSections = [
+    { items: [
+      { id: 'description', label: 'Property Description', icon: Home },
+      { id: 'worksheet', label: 'Purchase Worksheet', icon: Edit },
+      { id: 'photos', label: 'Photos', icon: Image }
+    ]},
+    { title: 'ANALYSIS', items: [
+      { id: 'analysis', label: 'Property Analysis', icon: TrendingUp },
+      { id: 'projections', label: 'Buy & Hold Projections', icon: BarChart3 }
+    ]}
+  ];
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-lg text-gray-600">Loading property analysis...</div>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading property analysis...</p>
+        </div>
       </div>
     );
   }
 
   if (!property) {
-    return null;
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <Home className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Property Not Found</h2>
+          <button onClick={() => navigate('/properties')}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Search Properties
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'description':
-        return <PropertyDescription property={property} />;
-      case 'photos':
-        return <PropertyPhotos property={property} />;
       case 'worksheet':
-        return (
-          <PurchaseWorksheet 
-            property={property}
-            inputs={inputs}
-            onInputChange={handleInputChange}
-            onSave={handleSave}
-          />
-        );
+        return <PurchaseWorksheet property={property} inputs={inputs} onInputChange={handleInputChange} />;
       case 'projections':
+        return <BuyHoldProjections property={property} inputs={inputs} results={results} />;
+      case 'photos':
         return (
-          <BuyHoldProjections 
-            property={property}
-            inputs={inputs}
-            results={results}
-          />
+          <div className="max-w-7xl mx-auto p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">Property Photos</h1>
+            {property.photos?.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {property.photos.map((photo, idx) => (
+                  <img key={idx} src={photo.href || photo} alt={`Photo ${idx + 1}`}
+                    className="w-full h-48 object-cover rounded-lg"
+                    onError={(e) => { e.target.src = 'https://placehold.co/400x300?text=No+Image'; }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <Image className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No photos available.</p>
+              </div>
+            )}
+          </div>
         );
-      case 'analysis':
+      case 'description':
+        return (
+          <div className="max-w-7xl mx-auto p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">Property Description</h1>
+            <div className="bg-white rounded-lg border p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Address</p>
+                  <p className="font-medium">{address}</p>
+                  <p className="text-gray-600">{city}, {state} {zipCode}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Price</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatPrice(price)}</p>
+                  {multiFamily.isMultiFamily && (
+                    <p className="text-sm text-gray-500">{formatPrice(price/units)}/unit</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-5 gap-4 pt-4 border-t">
+                <div><p className="text-sm text-gray-500">Beds</p><p className="text-lg font-semibold">{beds}</p></div>
+                <div><p className="text-sm text-gray-500">Baths</p><p className="text-lg font-semibold">{baths}</p></div>
+                <div><p className="text-sm text-gray-500">Sqft</p><p className="text-lg font-semibold">{sqft.toLocaleString()}</p></div>
+                <div><p className="text-sm text-gray-500">Units</p><p className="text-lg font-semibold">{units}</p></div>
+                <div><p className="text-sm text-gray-500">Year Built</p><p className="text-lg font-semibold">{property.yearBuilt || 'N/A'}</p></div>
+              </div>
+            </div>
+          </div>
+        );
       default:
-        return (
-          <PropertyAnalysisContent 
-            property={property}
-            inputs={inputs}
-            onInputChange={handleInputChange}
-            onSave={handleSave}
-            onResultsChange={setResults}
-          />
-        );
+        return <PropertyAnalysisContent property={property} inputs={inputs} onInputChange={handleInputChange} onResultsChange={handleResultsChange} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <PropertySidebar 
-        property={property}
-        activeSection={activeSection}
-        onSectionChange={setActiveSection}
-        onBack={() => navigate('/properties')}
-        isSaved={isSaved}
-      />
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-72 bg-white border-r flex flex-col h-full overflow-y-auto flex-shrink-0">
+        <button onClick={handleBack} className="p-4 text-blue-600 hover:text-blue-800 flex items-center gap-2 border-b hover:bg-gray-50">
+          <ArrowLeft className="w-4 h-4" /> Back to property search
+        </button>
 
-      <div className="flex-1 overflow-y-auto">
-        {renderContent()}
+        <div className="relative h-48 bg-gray-200">
+          <img src={image} alt={address} className="w-full h-full object-cover"
+            onError={(e) => { e.target.src = 'https://placehold.co/400x300?text=No+Image'; }}
+          />
+          <div className="absolute top-2 left-2 flex gap-1">
+            {isSaved && (
+              <span className="inline-flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                <Check className="w-3 h-3" /> SAVED
+              </span>
+            )}
+            <span className={`px-2 py-1 rounded text-xs font-semibold ${rentSource === 'RentCast' ? 'bg-emerald-600 text-white' : 'bg-orange-600 text-white'}`}>
+              {rentSource === 'RentCast' ? 'RENTCAST' : 'RENTAL'}
+            </span>
+            {multiFamily.isMultiFamily && (
+              <span className="px-2 py-1 rounded text-xs font-semibold bg-purple-600 text-white flex items-center gap-1">
+                <Building className="w-3 h-3" /> {units}
+              </span>
+            )}
+          </div>
+          <button onClick={handleShare}
+            className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-1">
+            <Share2 className="w-3 h-3" /> Share
+          </button>
+        </div>
+
+        <div className="p-4 border-b">
+          <div className="text-sm font-semibold text-gray-900 mb-2">Investment Property Analysis</div>
+          <div className="text-sm text-gray-600 space-y-1">
+            <div className="font-medium text-gray-900">{address}</div>
+            <div>{city}, {state} {zipCode}</div>
+            <div className="flex items-center gap-3 text-xs mt-2">
+              {beds > 0 && <span>{beds} BR</span>}
+              {baths > 0 && <span>· {baths} BA</span>}
+              {sqft > 0 && <span>· {sqft.toLocaleString()} Sq.Ft.</span>}
+              {multiFamily.isMultiFamily && <span className="text-purple-600 font-medium">· {units} Units</span>}
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-blue-600">{formatPrice(price)}</span>
+            {capRate > 0 && <span className="text-sm text-gray-500">{formatPercent(capRate)} Cap Rate</span>}
+          </div>
+          {rentPerUnit > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {multiFamily.isMultiFamily ? 'Rent/Unit:' : 'Est. Rent:'}
+              </span>
+              <span className={`text-sm font-semibold ${rentSource === 'RentCast' ? 'text-emerald-600' : 'text-blue-600'}`}>
+                {formatPrice(rentPerUnit)}/mo
+              </span>
+              {rentSource === 'RentCast' && <span className="text-xs text-emerald-600">✓ API</span>}
+            </div>
+          )}
+          {multiFamily.isMultiFamily && (
+            <div className="mt-1 text-sm text-purple-600">
+              Total: {formatPrice(rentPerUnit * units)}/mo
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 py-2 overflow-y-auto">
+          {menuSections.map((section, idx) => (
+            <div key={idx} className="mb-1">
+              {section.title && (
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">{section.title}</div>
+              )}
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSection === item.id;
+                return (
+                  <button key={item.id} onClick={() => setActiveSection(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                      isActive ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium' : 'text-gray-700 hover:bg-gray-50 border-l-4 border-transparent'
+                    }`}>
+                    <Icon className="w-4 h-4" /><span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* Only show Remove button when saved */}
+        {isSaved && (
+          <div className="p-4 border-t bg-gray-50">
+            <button onClick={handleUnsave} disabled={saving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 border border-red-200">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Remove from Saved
+            </button>
+          </div>
+        )}
       </div>
+
+      <div className="flex-1 overflow-y-auto">{renderContent()}</div>
     </div>
   );
 }

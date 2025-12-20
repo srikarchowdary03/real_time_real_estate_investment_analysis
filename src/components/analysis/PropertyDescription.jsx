@@ -1,265 +1,216 @@
+import { Home, Bed, Bath, Square, Calendar, Building, MapPin } from 'lucide-react';
+
 export default function PropertyDescription({ property }) {
-  const address = property.address || 'Address not available';
-  const city = property.city || '';
-  const state = property.state || '';
-  const zipCode = property.zipCode || '';
-  const beds = property.beds || property.description?.beds || 0;
-  const baths = property.baths || property.description?.baths || 0;
-  const sqft = property.sqft || property.description?.sqft || 0;
-  const yearBuilt = property.yearBuilt || property.year_built || 'N/A';
-  const propertyType = property.propertyType || property.property_type || 'N/A';
-  const lotSize = property.lotSize || property.lot_sqft || 'N/A';
+  // Extract data from multiple possible sources
+  const address = property?.address || 
+                  property?.location?.address?.line || 
+                  property?.propertyData?.address || 
+                  'Address not available';
+  
+  const city = property?.city || 
+               property?.location?.address?.city || 
+               property?.propertyData?.city || 
+               '';
+  
+  const state = property?.state || 
+                property?.location?.address?.state_code || 
+                property?.propertyData?.state || 
+                '';
+  
+  const zipCode = property?.zipCode || 
+                  property?.zip || 
+                  property?.location?.address?.postal_code || 
+                  property?.propertyData?.zipCode || 
+                  '';
+  
+  const beds = property?.beds || 
+               property?.description?.beds || 
+               property?.propertyData?.beds || 
+               0;
+  
+  const baths = property?.baths || 
+                property?.description?.baths || 
+                property?.propertyData?.baths || 
+                0;
+  
+  const sqft = property?.sqft || 
+               property?.description?.sqft || 
+               property?.propertyData?.sqft || 
+               0;
+  
+  const yearBuilt = property?.yearBuilt || 
+                    property?.year_built || 
+                    property?.description?.year_built || 
+                    'N/A';
+  
+  const propertyType = property?.propertyType || 
+                       property?.prop_type || 
+                       property?.description?.type || 
+                       property?.type || 
+                       'Residential';
+  
+  const lotSize = property?.lotSize || 
+                  property?.lot_sqft || 
+                  property?.description?.lot_sqft || 
+                  null;
+
+  const units = property?.detectedUnits || 
+                property?.units || 
+                property?.numberOfUnits || 
+                1;
+
+  const price = property?.price || 
+                property?.list_price || 
+                property?.propertyData?.price || 
+                0;
+
+  const formatPrice = (value) => {
+    if (!value) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatNumber = (value) => {
+    if (!value) return 'N/A';
+    return value.toLocaleString();
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Property Description</h1>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">
-            📋 Records & Listings
-          </button>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-            🗺️ View on Map
-          </button>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Property Description</h1>
+        <p className="text-gray-600">Property details and specifications</p>
       </div>
 
-      {/* Property Name */}
+      {/* Main Info Card */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <label className="text-sm font-medium text-gray-700 mb-2 block">
-          Property Name:
-        </label>
-        <input
-          type="text"
-          defaultValue={address}
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
-
-      {/* Short Description */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <label className="text-sm font-medium text-gray-700 mb-2 block">
-          Short Description:
-        </label>
-        <textarea
-          placeholder="Add a description..."
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Add a short description of this property to display in its reports.
-        </p>
-      </div>
-
-      {/* Tags & Labels */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <label className="text-sm font-medium text-gray-700 mb-2 block">
-          Tags & Labels:
-        </label>
-        <input
-          type="text"
-          placeholder="Add a tag..."
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Add tags to help you categorize this property, track its status and quickly find it later. 
-          You can manage tags in your{' '}
-          <a href="#" className="text-blue-600 hover:underline">settings</a>.
-        </p>
-      </div>
-
-      {/* Address Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-blue-600">ADDRESS</h2>
-          <button className="text-blue-600 hover:text-blue-800 text-sm">
-            📋 Copy
-          </button>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{address}</h2>
+            <p className="text-gray-600 flex items-center gap-1 mt-1">
+              <MapPin className="w-4 h-4" />
+              {city}{city && state ? ', ' : ''}{state} {zipCode}
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-blue-600">{formatPrice(price)}</div>
+            {units > 1 && (
+              <div className="text-sm text-gray-500">{formatPrice(price / units)}/unit</div>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Street Address:
-            </label>
-            <input
-              type="text"
-              defaultValue={address}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t">
+          <div className="text-center p-3 bg-gray-50 rounded-lg">
+            <Bed className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+            <div className="text-xl font-bold text-gray-900">{beds}</div>
+            <div className="text-xs text-gray-500">Bedrooms</div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              City:
-            </label>
-            <input
-              type="text"
-              defaultValue={city}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="text-center p-3 bg-gray-50 rounded-lg">
+            <Bath className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+            <div className="text-xl font-bold text-gray-900">{baths}</div>
+            <div className="text-xs text-gray-500">Bathrooms</div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              State/Region:
-            </label>
-            <input
-              type="text"
-              defaultValue={state}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="text-center p-3 bg-gray-50 rounded-lg">
+            <Square className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+            <div className="text-xl font-bold text-gray-900">{formatNumber(sqft)}</div>
+            <div className="text-xs text-gray-500">Sq. Ft.</div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              ZIP/Postal Code:
-            </label>
-            <input
-              type="text"
-              defaultValue={zipCode}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="text-center p-3 bg-gray-50 rounded-lg">
+            <Calendar className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+            <div className="text-xl font-bold text-gray-900">{yearBuilt}</div>
+            <div className="text-xs text-gray-500">Year Built</div>
           </div>
         </div>
       </div>
 
-      {/* Description Section */}
+      {/* Property Details */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h2 className="text-xl font-bold text-blue-600 mb-4">DESCRIPTION</h2>
+        <h3 className="text-lg font-bold text-blue-600 mb-4 flex items-center gap-2">
+          <Building className="w-5 h-5" />
+          Property Details
+        </h3>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-              <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded">API</span>
-              Property Type:
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
-              <option>{propertyType}</option>
-              <option>House</option>
-              <option>Condo</option>
-              <option>Multi-Family</option>
-              <option>Townhouse</option>
-              <option>Land</option>
-            </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Property Type</span>
+            <span className="font-medium text-gray-900 capitalize">{propertyType}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Bedrooms:
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
-              <option>{beds}</option>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                <option key={num} value={num}>{num}</option>
-              ))}
-            </select>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Units</span>
+            <span className="font-medium text-gray-900">{units}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Bathrooms:
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
-              <option>{baths}</option>
-              {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(num => (
-                <option key={num} value={num}>{num}</option>
-              ))}
-            </select>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Bedrooms</span>
+            <span className="font-medium text-gray-900">{beds}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Square Footage:
-            </label>
-            <input
-              type="number"
-              defaultValue={sqft}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Bathrooms</span>
+            <span className="font-medium text-gray-900">{baths}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Year Built:
-            </label>
-            <input
-              type="text"
-              defaultValue={yearBuilt}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Square Footage</span>
+            <span className="font-medium text-gray-900">{formatNumber(sqft)} sq ft</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Parking:
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
-              <option value="">Select...</option>
-              <option>None</option>
-              <option>Street</option>
-              <option>Garage - 1 car</option>
-              <option>Garage - 2 cars</option>
-              <option>Driveway</option>
-            </select>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Year Built</span>
+            <span className="font-medium text-gray-900">{yearBuilt}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Lot Size:
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                defaultValue={lotSize}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-600">
-                Square Feet
-              </span>
+          
+          {lotSize && (
+            <div className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-gray-600">Lot Size</span>
+              <span className="font-medium text-gray-900">{formatNumber(lotSize)} sq ft</span>
             </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              Zoning:
-            </label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              MLS Number:
-            </label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          )}
+          
+          {sqft > 0 && price > 0 && (
+            <div className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-gray-600">Price per Sq Ft</span>
+              <span className="font-medium text-gray-900">{formatPrice(price / sqft)}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Notes Section */}
+      {/* Address Details */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-xl font-bold text-blue-600 mb-4">NOTES</h2>
-        <p className="text-sm text-gray-600 mb-2">
-          Add notes, links to external listings or other information about this property.
-        </p>
-        <textarea
-          rows={6}
-          placeholder="Welcome to an exceptional opportunity in the heart of Golden Hill..."
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+        <h3 className="text-lg font-bold text-blue-600 mb-4 flex items-center gap-2">
+          <MapPin className="w-5 h-5" />
+          Location
+        </h3>
 
-      {/* Save Button */}
-      <div className="mt-6 flex justify-center">
-        <button className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-          Save Changes
-        </button>
+        <div className="space-y-3">
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">Street Address</span>
+            <span className="font-medium text-gray-900">{address}</span>
+          </div>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">City</span>
+            <span className="font-medium text-gray-900">{city || 'N/A'}</span>
+          </div>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">State</span>
+            <span className="font-medium text-gray-900">{state || 'N/A'}</span>
+          </div>
+          
+          <div className="flex justify-between py-2 border-b border-gray-100">
+            <span className="text-gray-600">ZIP Code</span>
+            <span className="font-medium text-gray-900">{zipCode || 'N/A'}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
