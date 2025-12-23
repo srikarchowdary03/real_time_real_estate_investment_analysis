@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Module: components/features/PropertyCard</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Module: components/features/PropertyCard</h1>
+
+    
+
+
+
+
+<section>
+
+<header>
+    
+        
+            
+        
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+        
+            <div class="description">Displays property information in a card format with image, price, details,
+and investment metrics. Includes save functionality, hover effects, quick scoring,
+and formula-based rent estimation. No external API calls per card for performance.
+
+Features:
+- Formula-based rent estimation (no API calls per card)
+- Quick investment scoring (0-100)
+- Multi-family property detection
+- Save/unsave functionality with Firebase
+- Hover effects with expanded metrics
+- Image error handling with fallback</div>
+        
+
+        
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+    <dt class="tag-version">Version:</dt>
+    <dd class="tag-version"><ul class="dummy"><li>1.0.0</li></ul></dd>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="components_features_propertycard.jsx.html">components/features/propertycard.jsx</a>, <a href="components_features_propertycard.jsx.html#line1">line 1</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+    
+    </div>
+
+    
+
+    
+        <h3 class="subsection-title">Requires</h3>
+
+        <ul>
+            <li>module:react</li>
+        
+            <li>module:react-router-dom</li>
+        
+            <li>module:lucide-react</li>
+        
+            <li>module:../../services/database</li>
+        
+            <li>module:../../hooks/useAuth</li>
+        </ul>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~PropertyCard"><span class="type-signature">(inner) </span>PropertyCard<span class="signature">(props)</span><span class="type-signature"> &rarr; {React.ReactElement}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Property Card Component
+
+Displays a property listing in card format with image, price, details, and
+investment metrics. Optimized for performance by avoiding per-card API calls.
+Uses formula-based rent estimation instead of calling RentCast for every card.
+
+PERFORMANCE OPTIMIZATIONS:
+- No Firebase calls without authentication check
+- Only calls isPropertySaved if user is logged in
+- Formula-based rent estimation (no RentCast API per card)
+- Memoized calculations for metrics
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>props</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Component props
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>property</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Property data object from Realty API
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>property_id</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Unique property identifier</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>list_price</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Property list price</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>location</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Location object with address</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>description</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Property description (beds, baths, sqft)</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>thumbnail</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Thumbnail image URL</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>isSelected</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    false
+                
+                </td>
+            
+
+            <td class="description last">Whether card is selected</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>onHover</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Callback when card is hovered</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>isExpanded</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    false
+                
+                </td>
+            
+
+            <td class="description last">Whether expanded view is open</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>onExpand</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">function</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Callback to open expanded view</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>rentData</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    null
+                
+                </td>
+            
+
+            <td class="description last">Optional pre-loaded rent data from RentCast
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>totalMonthlyRent</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Total monthly rent</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>rentEstimate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Per-unit rent estimate</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="components_features_propertycard.jsx.html">components/features/propertycard.jsx</a>, <a href="components_features_propertycard.jsx.html#line75">line 75</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    Property card component
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">React.ReactElement</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+    <h5>Examples</h5>
+    
+    <pre class="prettyprint"><code>&lt;PropertyCard 
+  property={propertyData}
+  onExpand={() => setExpandedProperty(propertyData)}
+  onHover={() => console.log('Hovered')}
+/></code></pre>
+
+    <pre class="prettyprint"><code>// With pre-loaded rent data
+&lt;PropertyCard 
+  property={propertyData}
+  rentData={{ totalMonthlyRent: 2000, rentEstimate: 2000 }}
+  isSelected={selectedId === propertyData.property_id}
+/></code></pre>
+
+
+
+        
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

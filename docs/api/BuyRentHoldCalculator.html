@@ -1,0 +1,4181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Class: BuyRentHoldCalculator</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Class: BuyRentHoldCalculator</h1>
+
+    
+
+
+
+
+<section>
+
+<header>
+    
+        <h2><span class="attribs"><span class="type-signature"></span></span>BuyRentHoldCalculator<span class="signature">(property, inputs)</span><span class="type-signature"></span></h2>
+        
+            <div class="class-description">Buy, Rent, and Hold investment calculator
+
+Comprehensive calculator class that matches Excel spreadsheet methodology.
+Calculates all financial metrics for rental property investment analysis
+including purchase costs, financing, income, expenses, NOI, cash flow,
+and investment returns.</div>
+        
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+        
+
+    
+    <h2>Constructor</h2>
+    
+
+    
+    <h4 class="name" id="BuyRentHoldCalculator"><span class="type-signature"></span>new BuyRentHoldCalculator<span class="signature">(property, inputs)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Create a calculator instance
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>property</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Property data object
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>address</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Property address</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>price</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Property list price</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>beds</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Number of bedrooms</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>baths</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last">Number of bathrooms</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>inputs</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Investment calculation inputs
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>offerPrice</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Proposed offer price</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>fairMarketValue</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Fair market value (defaults to offerPrice)</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>repairs</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    0
+                
+                </td>
+            
+
+            <td class="description last">Estimated repair costs</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>purchaseCostsPercent</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    3.0
+                
+                </td>
+            
+
+            <td class="description last">Closing costs as percentage</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>firstMtgLTV</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    80
+                
+                </td>
+            
+
+            <td class="description last">Loan-to-value ratio as percentage</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>firstMtgRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    7.0
+                
+                </td>
+            
+
+            <td class="description last">Mortgage interest rate as percentage</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>firstMtgAmortization</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    30
+                
+                </td>
+            
+
+            <td class="description last">Loan term in years</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>grossRents</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last">Annual gross rental income</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>vacancyRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    5.0
+                
+                </td>
+            
+
+            <td class="description last">Vacancy rate as percentage</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>managementRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    10.0
+                
+                </td>
+            
+
+            <td class="description last">Management fee as percentage</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>propertyTaxes</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    0
+                
+                </td>
+            
+
+            <td class="description last">Annual property taxes</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>insurance</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    0
+                
+                </td>
+            
+
+            <td class="description last">Annual insurance cost</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>appreciationRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    3.0
+                
+                </td>
+            
+
+            <td class="description last">Annual appreciation as percentage</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line102">line 102</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <h5>Example</h5>
+    
+    <pre class="prettyprint"><code>const property = { address: '123 Main St', price: 250000 };
+const inputs = {
+  offerPrice: 250000,
+  repairs: 10000,
+  grossRents: 24000,
+  firstMtgLTV: 80,
+  firstMtgRate: 7.0
+};
+
+const calculator = new BuyRentHoldCalculator(property, inputs);
+const analysis = calculator.getCompleteAnalysis();
+console.log(analysis.quickAnalysis.cashOnCashROI); // 8.5%</code></pre>
+
+
+
+    
+    </div>
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Classes</h3>
+
+        <dl>
+            <dt><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></dt>
+            <dd></dd>
+        </dl>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateCashRequirements"><span class="type-signature"></span>calculateCashRequirements<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Calculate total cash requirements
+
+Determines total cash needed including down payment, closing costs,
+deposits, and any prorations. This is the denominator for Cash-on-Cash ROI.
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line493">line 493</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Cash requirements
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.deposits - Security deposits or reserves
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.lessProRation - Credits or prorations
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashRequiredToClose - Cash needed at closing
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalCashRequired - Total cash investment
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateCashflowSummary"><span class="type-signature"></span>calculateCashflowSummary<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Computes annual and monthly cash flow by subtracting all expenses and
+debt service from effective income. Provides per-unit cash flow for
+multi-family properties.
+
+Formula: Cash Flow = NOI - Annual Debt Service
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line524">line 524</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Cashflow summary
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.effectiveGrossIncome - Annual EGI
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.operatingExpenses - Annual operating expenses
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.netOperatingIncome - Annual NOI
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.debtServicingCosts - Annual debt service (all loans)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.annualProfitOrLoss - Annual cash flow
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalMonthlyProfitOrLoss - Monthly cash flow
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashflowPerUnitPerMonth - Monthly cash flow per unit
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateFinancing"><span class="type-signature"></span>calculateFinancing<span class="signature">()</span><span class="type-signature"> &rarr; {Object|Object|number|number|number|number|number|number|number|number|Object|Object|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Computes mortgage details for up to three loan types (first mortgage,
+second mortgage, interest-only), calculates monthly payments, and
+determines total cash needed at closing.
+
+Supports CMHC insurance fees (Canadian mortgage insurance).
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line255">line 255</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Financing details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg - First mortgage details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.principalBorrowed - Amount borrowed (before CMHC)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.rate - Interest rate percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.amortization - Loan term in years
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.cmhcFeePercent - CMHC fee percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.cmhcAmount - CMHC fee amount
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.totalPrincipal - Total loan including CMHC
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.monthlyPayment - Monthly P&I payment
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtg.ltv - Loan-to-value percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.secondMtg - Second mortgage details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.interestOnly - Interest-only loan details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.otherMonthlyFinancingCosts - Other monthly costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashRequiredToClose - Total cash needed at closing
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateIncome"><span class="type-signature"></span>calculateIncome<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Computes total rental income from all sources, subtracts vacancy loss,
+and calculates EGI which is used for NOI calculation.
+
+Formula: EGI = Total Income - (Total Income × Vacancy Rate)
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line335">line 335</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Income details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.grossRents - Annual gross rents
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.parking - Annual parking income
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.storage - Annual storage income
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.laundry - Annual laundry income
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.otherIncome - Other annual income
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalIncome - Total annual income (before vacancy)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.vacancyLoss - Expected vacancy loss
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.vacancyRate - Vacancy rate percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.effectiveGrossIncome - EGI (total income minus vacancy)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateInvestmentScore"><span class="type-signature"></span>calculateInvestmentScore<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|string|string}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Calculate investment score (0-100)
+
+Assigns a numerical score to the investment based on key metrics:
+- Cash on Cash ROI (25 points)
+- Cap Rate (20 points)
+- Debt Coverage Ratio (20 points)
+- Monthly Cash Flow (20 points)
+- Total ROI (15 points)
+
+Score ranges:
+- 85-100: Excellent (outstanding investment)
+- 70-84: Good (solid returns expected)
+- 50-69: Fair (average returns)
+- 30-49: Risky (below average metrics)
+- 0-29: Avoid (poor investment, negative cash flow likely)
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line680">line 680</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Investment score details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.score - Investment score (0-100)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.maxScore - Maximum possible score (100)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.badge - Badge label (excellent/good/fair/risky/avoid)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.description - Score description
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateNOI"><span class="type-signature"></span>calculateNOI<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Calculate Net Operating Income (NOI)
+
+NOI is the income remaining after all operating expenses but before
+debt service (mortgage payments). This is a key metric used to calculate
+Cap Rate and other investment ratios.
+
+Formula: NOI = Effective Gross Income - Total Operating Expenses
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line468">line 468</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    NOI calculation
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.effectiveGrossIncome - EGI (income after vacancy)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalExpenses - Total annual operating expenses
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.netOperatingIncome - NOI (annual)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateOperatingExpenses"><span class="type-signature"></span>calculateOperatingExpenses<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number|number|number|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Computes all operating expenses for the property. Repairs and management
+are calculated as percentages of gross rents (Excel methodology).
+All other expenses are entered as fixed annual amounts.
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line383">line 383</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Operating expenses breakdown
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.propertyTaxes - Annual property taxes
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.insurance - Annual insurance cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.repairs - Annual repairs (calculated from gross rents)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.repairsPercent - Repairs percentage of gross rents
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.management - Annual management fee (calculated)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.managementPercent - Management percentage of gross rents
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.electricity - Annual electricity cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.gas - Annual gas cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.waterSewer - Annual water/sewer cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cable - Annual cable/internet cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.associationFees - Annual HOA/condo fees
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalExpenses - Total annual operating expenses
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculatePurchaseInfo"><span class="type-signature"></span>calculatePurchaseInfo<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number|number|number|number|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Calculate purchase information and Real Purchase Price (RPP)
+
+Computes the total cost of acquisition including offer price, repairs,
+and all closing costs. Supports both percentage-based and itemized
+closing costs.
+
+Formula: RPP = Offer Price + Repairs + Repairs Contingency + Closing Costs
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line186">line 186</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Purchase details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.offerPrice - Proposed offer price
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.repairs - Repair costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.repairsContingency - Additional repair buffer
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.closingCosts - Total closing costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.realPurchasePrice - Total acquisition cost (RPP)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.lenderFee - Lender fees
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.brokerFee - Broker fees
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.environmentals - Environmental inspection costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.inspections - Home inspection costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.appraisals - Appraisal costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.misc - Miscellaneous costs
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.transferTax - Transfer tax
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.legal - Legal fees
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="calculateQuickAnalysis"><span class="type-signature"></span>calculateQuickAnalysis<span class="signature">()</span><span class="type-signature"> &rarr; {Object|number|number|number|number|number|number|number|number|number|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Calculate quick analysis with all investment ratios
+
+Computes all key investment metrics including Cap Rate, Cash-on-Cash ROI,
+Debt Coverage Ratio, GRM, Equity ROI, Appreciation ROI, and Total ROI.
+These metrics are used for investment scoring and comparison.
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line580">line 580</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Complete investment ratios
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtgLTV - First mortgage LTV percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.firstMtgLTPP - First mortgage loan-to-purchase-price
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.capRateOnPP - Cap rate based on purchase price
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.capRateOnFMV - Cap rate based on fair market value
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.averageRent - Average rent per unit per month
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.grm - Gross Rent Multiplier (years to payback)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.dcr - Debt Coverage Ratio
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashOnCashROI - Cash-on-Cash return percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.equityROI - Equity buildup return percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.appreciationROI - Appreciation return percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.totalROI - Total return on investment percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.forcedAppROI - Forced appreciation return
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.expenseToIncomeRatio - Expense ratio percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.principalPaidYear1 - Total principal paid in year 1
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.appreciationValue - Dollar appreciation in year 1
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="getCompleteAnalysis"><span class="type-signature"></span>getCompleteAnalysis<span class="signature">()</span><span class="type-signature"> &rarr; {Object|Object|Object|Object|Object|Object|Object|Object|Object|Object|Object}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Get complete investment analysis
+
+Executes all calculation methods and returns a comprehensive analysis
+object containing property info, purchase details, financing, income,
+expenses, NOI, cash requirements, cash flow, investment ratios, and
+investment score.
+
+This is the main method to call for a complete property analysis.
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line774">line 774</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Complete analysis
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.propertyInfo - Property information
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.purchase - Purchase details and RPP
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.financing - Financing and mortgage details
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.income - Income breakdown and EGI
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.expenses - Operating expenses
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.noi - Net Operating Income
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashRequirements - Cash needed at closing
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.cashflow - Cash flow summary
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.quickAnalysis - All investment ratios
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.investmentScore - Investment score (0-100)
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+    <h5>Example</h5>
+    
+    <pre class="prettyprint"><code>const calculator = new BuyRentHoldCalculator(property, inputs);
+const analysis = calculator.getCompleteAnalysis();
+
+console.log(analysis.quickAnalysis.cashOnCashROI); // 8.5
+console.log(analysis.cashflow.totalMonthlyProfitOrLoss); // 450
+console.log(analysis.investmentScore.score); // 75</code></pre>
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="getPropertyInfo"><span class="type-signature"></span>getPropertyInfo<span class="signature">()</span><span class="type-signature"> &rarr; {Object|string|number|number|number|number|number|number}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Get property information
+
+Extracts and standardizes property details from inputs and property data.
+Provides default values for missing fields.
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="utils_investmentCalculations.js.html">utils/investmentCalculations.js</a>, <a href="utils_investmentCalculations.js.html#line149">line 149</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+<ul>
+        <li>
+<div class="param-desc">
+    Property information
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.address - Property address
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.fairMarketValue - Fair market value
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.vacancyRate - Vacancy rate percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.managementRate - Management rate percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.advertisingCost - Advertising cost
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.numberOfUnits - Number of rental units
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    
+        <li>
+<div class="param-desc">
+    returns.appreciationRate - Annual appreciation percentage
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">number</span>
+
+
+    </dd>
+</dl>
+</li>
+    </ul>
+
+
+
+
+
+        
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

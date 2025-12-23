@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/features/PropertyMap.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/features/PropertyMap.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file Interactive property map with boundary filtering
+ * @module components/features/PropertyMap
+ * @description Mapbox GL map component with color-coded property markers based on investment
+ * scores. Includes boundary drawing/editing for geographic filtering, property popups with
+ * quick metrics, and integration with property grid filtering.
+ * 
+ * Key Features:
+ * - Investment score-based marker coloring (0-100 scale)
+ * - Boundary drawing tool (polygon selection)
+ * - Boundary filtering (affects both map and grid display)
+ * - Property popups with quick investment metrics
+ * - Responsive marker sizing based on selection
+ * - Map controls (navigation, fullscreen, geolocation, scale)
+ * 
+ * Investment Scoring Algorithm:
+ * Base: 50 points
+ * - Price per sqft: +20 to -15 points
+ * - Bedroom value ratio: +15 to -10 points
+ * - Rent potential/gross yield: +15 to -10 points
+ * - Property size bonus: +5 to -5 points
+ * - Multi-unit bonus: +15 points
+ * - Property age: +5 to -10 points
+ * - Price range sweet spot: +5 to -5 points
+ * 
+ * Score Colors:
+ * - 80-100: Green (#10B981) - Excellent
+ * - 65-79: Light Green (#22C55E) - Good
+ * - 50-64: Yellow (#EAB308) - Fair
+ * - 35-49: Orange (#F97316) - Risky
+ * - 0-34: Red (#EF4444) - Poor
+ * 
+ * @requires react
+ * @requires react-map-gl
+ * @requires @mapbox/mapbox-gl-draw
+ * @requires mapbox-gl
+ * @requires ../../utils/boundaryHelpers
+ * 
+ * @version 1.0.0
+ */
+
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Map, { Marker, Popup, NavigationControl, FullscreenControl, GeolocateControl, ScaleControl } from 'react-map-gl';
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { filterPropertiesInBoundary } from '../../utils/boundaryHelpers';
+
+/**
+ * Mapbox access token from environment variables
+ * @constant {string}
+ * @private
+ */
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+// ===== INVESTMENT SCORE CALCULATION =====
+/**
+ * Calculate investment score based on property characteristics
+ * 
+ * Comprehensive scoring algorithm that evaluates investment potential using
+ * multiple property metrics. Score ranges from 0-100 with higher being better.
+ * 
+ * SCORING COMPONENTS:
+ * 1. Price per sqft (20 points max) - Lower is better
+ * 2. Bedroom value ratio (15 points max) - More beds per $100k is better
+ * 3. Rent potential/gross yield (15 points max) - Higher yield is better
+ * 4. Property size (5 points max) - Larger properties score bonus
+ * 5. Multi-unit bonus (15 points) - Multi-family properties highly valued
+ * 6. Property age (5 points max) - Newer properties score higher
+ * 7. Price range sweet spot (5 points max) - Mid-range prices optimal
+ * 
+ * @function
+ * @param {Object} property - Property data object
+ * @param {number} [property.list_price] - List price
+ * @param {number} [property.price] - Alternate price field
+ * @param {Object} [property.description] - Property description
+ * @param {number} [property.description.beds] - Number of bedrooms
+ * @param {number} [property.description.baths] - Number of bathrooms
+ * @param {number} [property.description.sqft] - Square footage
+ * @param {number} [property.description.year_built] - Year built
+ * @param {string} [property.description.type] - Property type
+ * @returns {number} Investment score (0-100)
+ * 
+ * @example
+ * const score = calculateInvestmentScore({
+ *   price: 250000,
+ *   description: { beds: 3, baths: 2, sqft: 1500, type: 'Duplex' }
+ * });
+ * console.log(score); // 82 (Excellent investment)
+ * 
+ * @example
+ * // Poor investment (overpriced, few beds)
+ * const score = calculateInvestmentScore({
+ *   price: 500000,
+ *   description: { beds: 2, sqft: 1200, type: 'Condo' }
+ * });
+ * console.log(score); // 28 (Poor investment)
+ */
+const calculateInvestmentScore = (property) => {
+  const price = property.list_price || property.price || 0;
+  const beds = property.description?.beds || property.beds || 0;
+  const baths = property.description?.baths || property.baths || 0;
+  const sqft = property.description?.sqft || property.sqft || 0;
+  const lotSqft = property.description?.lot_sqft || property.lot_sqft || 0;
+  const yearBuilt = property.description?.year_built || property.year_built || 0;
+  const propertyType = property.description?.type || property.type || '';
+  
+  if (!price || price &lt;= 0) return 50;
+  
+  let score = 50; // Base score
+  
+  // === 1. PRICE PER SQFT SCORING (Lower = Better for investment) ===
+  if (sqft > 0) {
+    const pricePerSqft = price / sqft;
+    if (pricePerSqft &lt; 100) score += 20;        // Excellent value
+    else if (pricePerSqft &lt; 150) score += 15;   // Great value
+    else if (pricePerSqft &lt; 200) score += 10;   // Good value
+    else if (pricePerSqft &lt; 250) score += 5;    // Fair value
+    else if (pricePerSqft &lt; 300) score += 0;    // Average
+    else if (pricePerSqft &lt; 400) score -= 5;    // Above average price
+    else if (pricePerSqft &lt; 500) score -= 10;   // Expensive
+    else score -= 15;                            // Very expensive
+  }
+  
+  // === 2. BEDROOM VALUE SCORING (More beds per $100k = Better) ===
+  if (beds > 0 &amp;&amp; price > 0) {
+    const bedsPerHundredK = beds / (price / 100000);
+    if (bedsPerHundredK >= 1.5) score += 15;     // Excellent bed/price ratio
+    else if (bedsPerHundredK >= 1.0) score += 10;
+    else if (bedsPerHundredK >= 0.7) score += 5;
+    else if (bedsPerHundredK >= 0.5) score += 0;
+    else if (bedsPerHundredK >= 0.3) score -= 5;
+    else score -= 10;                            // Few beds for price
+  }
+  
+  // === 3. RENT POTENTIAL SCORING (Based on realistic rent estimates) ===
+  // Rent-to-price ratio varies by price range (lower priced = higher ratio)
+  let rentMultiplier;
+  if (price &lt; 150000) rentMultiplier = 0.009;      // 0.9% for cheap properties
+  else if (price &lt; 250000) rentMultiplier = 0.008; // 0.8%
+  else if (price &lt; 400000) rentMultiplier = 0.007; // 0.7%
+  else if (price &lt; 600000) rentMultiplier = 0.006; // 0.6%
+  else if (price &lt; 1000000) rentMultiplier = 0.005; // 0.5%
+  else rentMultiplier = 0.004;                      // 0.4% for expensive
+  
+  // Adjust for bedrooms (more beds = more rent potential)
+  if (beds >= 4) rentMultiplier *= 1.15;
+  else if (beds >= 3) rentMultiplier *= 1.08;
+  else if (beds &lt;= 1) rentMultiplier *= 0.85;
+  
+  const estimatedRent = price * rentMultiplier;
+  const grossYield = (estimatedRent * 12 / price) * 100;
+  
+  // Score based on gross yield
+  if (grossYield >= 12) score += 15;
+  else if (grossYield >= 10) score += 10;
+  else if (grossYield >= 8) score += 5;
+  else if (grossYield >= 6) score += 0;
+  else if (grossYield >= 5) score -= 5;
+  else score -= 10;
+  
+  // === 4. PROPERTY SIZE BONUS ===
+  if (sqft >= 2500) score += 5;       // Large home - more rental appeal
+  else if (sqft >= 1800) score += 3;
+  else if (sqft &lt; 800) score -= 5;    // Very small - limited appeal
+  
+  // === 5. MULTI-UNIT BONUS ===
+  const typeStr = propertyType.toLowerCase();
+  if (typeStr.includes('multi') || typeStr.includes('duplex') || 
+      typeStr.includes('triplex') || typeStr.includes('fourplex')) {
+    score += 15; // Multi-family is great for investment
+  } else if (typeStr.includes('townhouse') || typeStr.includes('condo')) {
+    score -= 5; // HOA fees reduce cash flow
+  }
+  
+  // === 6. AGE CONSIDERATION ===
+  const currentYear = new Date().getFullYear();
+  if (yearBuilt > 0) {
+    const age = currentYear - yearBuilt;
+    if (age &lt;= 5) score += 5;          // New - less maintenance
+    else if (age &lt;= 15) score += 3;    // Relatively new
+    else if (age >= 50) score -= 5;    // Old - more maintenance
+    else if (age >= 80) score -= 10;   // Very old
+  }
+  
+  // === 7. PRICE RANGE SWEET SPOT ===
+  // Mid-range properties often have best rent-to-price ratios
+  if (price >= 150000 &amp;&amp; price &lt;= 350000) {
+    score += 5; // Sweet spot for rentals
+  } else if (price &lt; 100000) {
+    score += 3; // Cheap but potentially high yield
+  } else if (price > 750000) {
+    score -= 5; // Luxury - harder to cash flow
+  }
+  
+  // Clamp score between 0-100
+  return Math.max(0, Math.min(100, Math.round(score)));
+};
+
+// ===== SCORE-BASED COLORS =====
+/**
+ * Get marker color based on investment score
+ * 
+ * Maps score to hex color for visual representation on map.
+ * 
+ * @function
+ * @param {number} score - Investment score (0-100)
+ * @returns {string} Hex color code
+ * 
+ * @example
+ * getScoreColor(85);  // '#10B981' (green - excellent)
+ * getScoreColor(55);  // '#EAB308' (yellow - fair)
+ * getScoreColor(25);  // '#EF4444' (red - poor)
+ */
+const getScoreColor = (score) => {
+  if (score >= 80) return '#10B981';
+  if (score >= 65) return '#22C55E';
+  if (score >= 50) return '#EAB308';
+  if (score >= 35) return '#F97316';
+  return '#EF4444';
+};
+
+/**
+ * Get score label text
+ * 
+ * @function
+ * @param {number} score - Investment score (0-100)
+ * @returns {string} Score label
+ * 
+ * @example
+ * getScoreLabel(85); // 'Excellent'
+ * getScoreLabel(55); // 'Fair'
+ */
+const getScoreLabel = (score) => {
+  if (score >= 80) return 'Excellent';
+  if (score >= 65) return 'Good';
+  if (score >= 50) return 'Fair';
+  if (score >= 35) return 'Risky';
+  return 'Poor';
+};
+
+// ===== CUSTOM MARKER COMPONENT =====
+/**
+ * Custom Property Marker Component
+ * 
+ * Renders teardrop-shaped marker with investment score displayed inside.
+ * Marker size and styling changes based on selection state.
+ * 
+ * Shape: Teardrop (circle with pointed bottom) using CSS transform
+ * Color: Based on investment score (see getScoreColor)
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data
+ * @param {Function} props.onClick - Click handler
+ * @param {boolean} props.isSelected - Whether marker is selected
+ * @returns {React.ReactElement} Marker component
+ * 
+ * @example
+ * &lt;PropertyMarker
+ *   property={propertyData}
+ *   onClick={() => handleClick(property)}
+ *   isSelected={selectedId === property.property_id}
+ * />
+ */
+const PropertyMarker = ({ property, onClick, isSelected }) => {
+   /**
+   * Calculate investment score for this property
+   * Memoized to prevent recalculation on every render
+   * @type {number}
+   */
+  const score = useMemo(() => calculateInvestmentScore(property), [property]);
+    /**
+   * Marker color based on score
+   * @type {string}
+   */
+  const color = getScoreColor(score);
+  
+  return (
+    &lt;div
+      onClick={onClick}
+      className="cursor-pointer transform transition-transform hover:scale-110"
+    >
+      &lt;div
+        style={{
+          width: isSelected ? '36px' : '28px',
+          height: isSelected ? '36px' : '28px',
+          backgroundColor: color,
+          borderRadius: '50% 50% 50% 0',
+          transform: 'rotate(-45deg)',
+          border: isSelected ? '3px solid white' : '2px solid white',
+          boxShadow: isSelected 
+            ? '0 4px 12px rgba(0,0,0,0.4)' 
+            : '0 2px 6px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        &lt;span
+          style={{
+            transform: 'rotate(45deg)',
+            color: 'white',
+            fontSize: isSelected ? '12px' : '10px',
+            fontWeight: 'bold',
+          }}
+        >
+          {score}
+        &lt;/span>
+      &lt;/div>
+    &lt;/div>
+  );
+};
+
+/**
+ * Property Map Main Component
+ * 
+ * Interactive Mapbox map with property markers, boundary drawing, and filtering.
+ * Manages map state, draw controls, boundary filtering, and property selection.
+ * 
+ * BOUNDARY FILTERING FLOW:
+ * 1. User clicks "Draw Boundary" button
+ * 2. Drawing mode enabled, user draws polygon
+ * 3. On completion, boundary coordinates saved
+ * 4. filterPropertiesInBoundary called with all properties
+ * 5. Filtered properties sent to parent via onBoundaryChange
+ * 6. Parent updates grid to show only filtered properties
+ * 7. Map markers remain visible (all properties shown)
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Array&lt;Object>} [props.properties=[]] - Array of all properties
+ * @param {Object|null} props.selectedProperty - Currently selected property
+ * @param {Function} [props.onPropertyClick] - Callback when marker clicked
+ * @param {Function} [props.onBoundaryChange] - Callback when boundary changes (filtered props)
+ * @param {Function} [props.onBoundaryCreated] - Callback when boundary created
+ * @param {Function} [props.onBoundaryEdited] - Callback when boundary edited
+ * @param {Function} [props.onBoundaryDeleted] - Callback when boundary deleted
+ * @param {string} [props.className=''] - Additional CSS classes
+ * @returns {React.ReactElement} Interactive property map
+ * 
+ * @example
+ * &lt;PropertyMap
+ *   properties={allProperties}
+ *   selectedProperty={selected}
+ *   onPropertyClick={handleClick}
+ *   onBoundaryChange={(filtered, hasBoundary) => {
+ *     setDisplayedProperties(filtered);
+ *   }}
+ * />
+ */
+// ===== MAIN COMPONENT =====
+const PropertyMap = ({ 
+  properties = [], 
+  selectedProperty: externalSelectedProperty,
+  onPropertyClick,
+  onBoundaryChange,        // NEW: Callback when boundary changes (filtered properties)
+  onBoundaryCreated,
+  onBoundaryEdited,
+  onBoundaryDeleted,
+  className = '' 
+}) => {
+  /**
+   * Map instance reference for direct Mapbox GL access
+   * @type {React.MutableRefObject}
+   */
+  const mapRef = useRef();
+  
+  /**
+   * MapboxDraw instance reference for boundary drawing
+   * @type {React.MutableRefObject}
+   */
+  const drawRef = useRef();
+  
+  /**
+   * Map viewport state (center, zoom)
+   * @type {Array}
+   */
+  const [viewState, setViewState] = useState({
+    longitude: -71.0589,
+    latitude: 42.3601,
+    zoom: 12
+  });
+  /**
+   * Internally selected property (from marker click)
+   * @type {Array}
+   */
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  
+  /**
+   * Drawing mode enabled state
+   * @type {Array}
+   */
+  const [drawingEnabled, setDrawingEnabled] = useState(false);
+  
+  /**
+   * Current boundary polygon geometry
+   * @type {Array}
+   */
+  const [currentBoundary, setCurrentBoundary] = useState(null);
+  
+  /**
+   * Properties filtered by boundary
+   * @type {Array}
+   */
+  const [filteredProperties, setFilteredProperties] = useState([]);
+  
+  /**
+   * Whether boundary is currently active
+   * @type {Array}
+   */
+  const [hasBoundary, setHasBoundary] = useState(false);
+
+  /**
+   * Store onBoundaryChange in ref to avoid dependency issues
+   * 
+   * CRITICAL: Prevents infinite loops in useEffect by avoiding
+   * onBoundaryChange as direct dependency.
+   * 
+   * @type {React.MutableRefObject&lt;Function>}
+   */
+  const onBoundaryChangeRef = useRef(onBoundaryChange);
+  useEffect(() => {
+    onBoundaryChangeRef.current = onBoundaryChange;
+  }, [onBoundaryChange]);
+
+  /**
+   * Get coordinates from property data
+   * 
+   * Tries multiple possible property formats for lat/lng coordinates.
+   * 
+   * @function
+   * @param {Object} property - Property object
+   * @returns {Object|null} Coordinates or null
+   * @returns {number} returns.lat - Latitude
+   * @returns {number} returns.lng - Longitude
+   */
+  const getCoords = (property) => {
+    const lat = property.location?.address?.coordinate?.lat || property.lat;
+    const lng = property.location?.address?.coordinate?.lon || property.lon;
+    return (lat &amp;&amp; lng) ? { lat, lng } : null;
+  };
+
+  /**
+   * Calculate map center from properties on initial load
+   * 
+   * Calculates average latitude/longitude of all properties with valid
+   * coordinates to center map on search results. Only runs on initial
+   * load, not when boundary changes.
+   * 
+   * Runs when: properties array changes (new search)
+   * 
+   * @listens properties
+   */
+  useEffect(() => {
+    if (properties &amp;&amp; properties.length > 0 &amp;&amp; !hasBoundary) {
+      const validProperties = properties.filter(p => getCoords(p));
+
+      if (validProperties.length > 0) {
+        const latSum = validProperties.reduce((sum, p) => sum + getCoords(p).lat, 0);
+        const lngSum = validProperties.reduce((sum, p) => sum + getCoords(p).lng, 0);
+        
+        setViewState(prev => ({
+          ...prev,
+          longitude: lngSum / validProperties.length,
+          latitude: latSum / validProperties.length,
+        }));
+      }
+    }
+  }, [properties]); // Only depend on properties, not hasBoundary
+
+  // Filter properties when boundary changes
+  /**
+   * Filter properties when boundary changes
+   * 
+   * When boundary is drawn/edited, filters properties to those within polygon.
+   * Notifies parent component via onBoundaryChange callback to update grid display.
+   * 
+   * IMPORTANT: Uses onBoundaryChangeRef to avoid infinite loops.
+   * 
+   * Runs when: currentBoundary or properties changes
+   * 
+   * @listens currentBoundary
+   * @listens properties
+   */
+  useEffect(() => {
+    if (currentBoundary) {
+      const filtered = filterPropertiesInBoundary(properties, currentBoundary);
+      setFilteredProperties(filtered);
+      setHasBoundary(true);
+      
+      // Notify parent component of filtered properties using ref
+      if (onBoundaryChangeRef.current) {
+        onBoundaryChangeRef.current(filtered, true);
+      }
+    } else {
+      setFilteredProperties([]);
+      setHasBoundary(false);
+      
+      // Notify parent to show all properties using ref
+      if (onBoundaryChangeRef.current) {
+        onBoundaryChangeRef.current(properties, false);
+      }
+    }
+  }, [currentBoundary, properties]); // Remove onBoundaryChange from deps
+
+  // Handle property marker click
+  /**
+   * Handle property marker click
+   * 
+   * Selects property and opens popup. Prevents click when drawing mode is active.
+   * Stops event propagation to prevent map click handler from firing.
+   * 
+   * @function
+   * @callback
+   * @param {Object} property - Property that was clicked
+   * @param {Object} e - Click event
+   */
+  const handleMarkerClick = useCallback((property, e) => {
+    if (drawingEnabled) return;
+    e?.originalEvent?.stopPropagation();
+    setSelectedProperty(property);
+  }, [drawingEnabled]);
+
+  // Initialize Mapbox Draw
+  /**
+   * Initialize Mapbox Draw controls
+   * 
+   * Sets up MapboxDraw for polygon drawing. Handles draw.create, draw.update,
+   * and draw.delete events. Converts polygon coordinates to boundary format
+   * and notifies parent callbacks.
+   * 
+   * COORDINATE CONVERSION:
+   * - Mapbox Draw uses [lng, lat] format
+   * - Boundary helpers use [lat, lng] format
+   * - Conversion: coords[0].map(coord => [coord[1], coord[0]])
+   * 
+   * Runs when: drawingEnabled, onBoundaryCreated, onBoundaryEdited, or onBoundaryDeleted changes
+   * 
+   * @listens drawingEnabled
+   * @listens onBoundaryCreated
+   * @listens onBoundaryEdited
+   * @listens onBoundaryDeleted
+   */
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current.getMap();
+    
+    const draw = new MapboxDraw({
+      displayControlsDefault: false,
+      controls: {
+        polygon: drawingEnabled,
+        trash: drawingEnabled
+      },
+      defaultMode: drawingEnabled ? 'draw_polygon' : 'simple_select'
+    });
+
+    map.addControl(draw, 'top-right');
+    drawRef.current = draw;
+
+    /**
+     * Handle draw.create event (boundary created)
+     * @param {Object} e - Draw event
+     */
+    const handleCreate = (e) => {
+      const feature = e.features[0];
+      const coords = feature.geometry.coordinates;
+
+      if (feature.geometry.type === 'Polygon') {
+        const points = coords[0].map(coord => [coord[1], coord[0]]);
+        const boundary = { type: 'polygon', points };
+        setCurrentBoundary(boundary);
+        setDrawingEnabled(false); // Exit drawing mode after creating
+        if (onBoundaryCreated) onBoundaryCreated(boundary);
+      }
+    };
+
+      /**
+     * Handle draw.update event (boundary edited)
+     * @param {Object} e - Draw event
+     */
+    const handleUpdate = (e) => {
+      const feature = e.features[0];
+      const coords = feature.geometry.coordinates;
+
+      if (feature.geometry.type === 'Polygon') {
+        const points = coords[0].map(coord => [coord[1], coord[0]]);
+        const boundary = { type: 'polygon', points };
+        setCurrentBoundary(boundary);
+        if (onBoundaryEdited) onBoundaryEdited(boundary);
+      }
+    };
+
+    /**
+     * Handle draw.delete event (boundary deleted)
+     */
+    const handleDelete = () => {
+      setCurrentBoundary(null);
+      if (onBoundaryDeleted) onBoundaryDeleted();
+    };
+
+    map.on('draw.create', handleCreate);
+    map.on('draw.update', handleUpdate);
+    map.on('draw.delete', handleDelete);
+
+    return () => {
+      map.off('draw.create', handleCreate);
+      map.off('draw.update', handleUpdate);
+      map.off('draw.delete', handleDelete);
+      if (map.hasControl(draw)) {
+        map.removeControl(draw);
+      }
+    };
+  }, [drawingEnabled, onBoundaryCreated, onBoundaryEdited, onBoundaryDeleted]);
+
+    /**
+   * Toggle drawing mode on/off
+   * 
+   * Enables/disables polygon drawing mode and updates MapboxDraw mode.
+   * 
+   * @function
+   */
+  const toggleDrawing = () => {
+    const newState = !drawingEnabled;
+    setDrawingEnabled(newState);
+    
+    if (drawRef.current) {
+      if (newState) {
+        drawRef.current.changeMode('draw_polygon');
+      } else {
+        drawRef.current.changeMode('simple_select');
+      }
+    }
+  };
+
+   /**
+   * Clear all boundaries
+   * 
+   * Deletes all drawn polygons, exits drawing mode, and notifies parent.
+   * Resets filtering to show all properties.
+   * 
+   * @function
+   */
+  const clearBoundaries = () => {
+    if (drawRef.current) {
+      drawRef.current.deleteAll();
+    }
+    setCurrentBoundary(null);
+    setDrawingEnabled(false);
+    if (onBoundaryDeleted) onBoundaryDeleted();
+  };
+
+  // Format price
+  /**
+   * Format price for display
+   * 
+   * @function
+   * @param {number} price - Price value
+   * @returns {string} Formatted price (e.g., "$1.2M", "$250K")
+   */
+  const formatPrice = (price) => {
+    if (!price) return 'N/A';
+    if (price >= 1000000) return `$${(price / 1000000).toFixed(1)}M`;
+    if (price >= 1000) return `$${(price / 1000).toFixed(0)}K`;
+    return `$${price.toLocaleString()}`;
+  };
+
+  // Estimate rent with variable multiplier based on price range
+  /**
+   * Estimate monthly rent using formula-based calculation
+   * 
+   * Simple rent estimation without API calls. Uses price-to-rent ratios
+   * that vary by price range, with adjustments for bedrooms and size.
+   * 
+   * FORMULA:
+   * 1. Base multiplier by price range (0.4%-0.9%)
+   * 2. Bedroom adjustment (+15% for 4+ beds, -15% for studios)
+   * 3. Size adjustment (+5% for 2000+ sqft, -8% for &lt;1000 sqft)
+   * 4. Round to nearest $50
+   * 
+   * @function
+   * @param {Object} property - Property object
+   * @returns {number} Estimated monthly rent
+   * 
+   * @example
+   * // $250k property, 3 bed, 1500 sqft
+   * // Base: 250000 * 0.008 = 2000
+   * // Beds: 2000 * 1.08 = 2160
+   * // Result: 2150 (rounded to $50)
+   */
+  const estimateRent = (property) => {
+    const price = property.list_price || property.price || 0;
+    const beds = property.description?.beds || property.beds || 0;
+    const sqft = property.description?.sqft || property.sqft || 0;
+    
+    if (!price) return 0;
+    
+    // Rent-to-price ratio varies by price range
+    let rentMultiplier;
+    if (price &lt; 150000) rentMultiplier = 0.009;
+    else if (price &lt; 250000) rentMultiplier = 0.008;
+    else if (price &lt; 400000) rentMultiplier = 0.007;
+    else if (price &lt; 600000) rentMultiplier = 0.006;
+    else if (price &lt; 1000000) rentMultiplier = 0.005;
+    else rentMultiplier = 0.004;
+    
+    let rent = price * rentMultiplier;
+    
+    // Bedroom adjustments
+    if (beds >= 4) rent *= 1.15;
+    else if (beds >= 3) rent *= 1.08;
+    else if (beds &lt;= 1) rent *= 0.85;
+    
+    // Size adjustment
+    if (sqft > 2000) rent *= 1.05;
+    else if (sqft &lt; 1000) rent *= 0.92;
+    
+    return Math.round(rent / 50) * 50;
+  };
+
+  // Properties to display on map - filtered when boundary exists
+  /**
+   * Properties to display on map
+   * When boundary active: shows filtered properties
+   * When no boundary: shows all properties
+   * @type {Array&lt;Object>}
+   */ 
+  const displayProperties = hasBoundary ? filteredProperties : properties;
+ /**
+   * Total property count (all results)
+   * @type {number}
+   */
+  const totalCount = properties.length;
+  
+  /**
+   * Filtered property count (within boundary)
+   * @type {number}
+   */
+  const filteredCount = filteredProperties.length;
+
+  return (
+    &lt;div className={`relative h-full ${className}`}>
+      {/* Control Panel */}
+      &lt;div className="absolute top-4 left-4 z-10 bg-white rounded-xl shadow-lg p-4 space-y-3 max-w-[220px]">
+        {/* Draw Button */}
+        &lt;button
+          onClick={toggleDrawing}
+          className={`w-full px-4 py-2.5 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
+            drawingEnabled
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          {drawingEnabled ? (
+            &lt;>
+              &lt;span>✓&lt;/span> Drawing Active
+            &lt;/>
+          ) : (
+            &lt;>
+              &lt;svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              &lt;/svg>
+              Draw Boundary
+            &lt;/>
+          )}
+        &lt;/button>
+
+        {/* Boundary Info */}
+        {hasBoundary &amp;&amp; (
+          &lt;div className="space-y-2">
+            &lt;div className="bg-blue-50 p-3 rounded-lg">
+              &lt;div className="text-xs font-semibold text-blue-900 mb-1">
+                Properties in Area
+              &lt;/div>
+              &lt;div className="text-2xl font-bold text-blue-600">
+                {filteredCount}
+              &lt;/div>
+              &lt;div className="text-xs text-blue-700">
+                of {totalCount} total
+              &lt;/div>
+            &lt;/div>
+
+            &lt;button
+              onClick={clearBoundaries}
+              className="w-full px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+            >
+              Clear Boundary
+            &lt;/button>
+          &lt;/div>
+        )}
+
+        {/* Drawing Instructions */}
+        {drawingEnabled &amp;&amp; (
+          &lt;div className="text-xs text-gray-600 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
+            &lt;div className="font-semibold mb-1 text-yellow-800">📍 Instructions:&lt;/div>
+            &lt;ul className="space-y-1 text-yellow-700">
+              &lt;li>• Click points on map&lt;/li>
+              &lt;li>• Close shape by clicking first point&lt;/li>
+            &lt;/ul>
+          &lt;/div>
+        )}
+
+        {/* Legend */}
+        &lt;div className="border-t pt-3">
+          &lt;div className="text-xs font-semibold text-gray-700 mb-2">Investment Score&lt;/div>
+          &lt;div className="space-y-1.5">
+            {[
+              { color: '#10B981', label: '80+ Excellent' },
+              { color: '#22C55E', label: '65-79 Good' },
+              { color: '#EAB308', label: '50-64 Fair' },
+              { color: '#F97316', label: '35-49 Risky' },
+              { color: '#EF4444', label: '0-34 Poor' },
+            ].map(({ color, label }) => (
+              &lt;div key={label} className="flex items-center gap-2">
+                &lt;div 
+                  className="w-3 h-3 rounded-full" 
+                  style={{ backgroundColor: color }}
+                />
+                &lt;span className="text-xs text-gray-600">{label}&lt;/span>
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* Property Count Badge */}
+      &lt;div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-md px-3 py-2">
+        &lt;span className="text-sm font-medium text-gray-700">
+          {hasBoundary ? `${filteredCount} in area` : `${totalCount} properties`}
+        &lt;/span>
+      &lt;/div>
+
+      {/* Mapbox Map */}
+      &lt;Map
+        ref={mapRef}
+        {...viewState}
+        onMove={evt => !drawingEnabled &amp;&amp; setViewState(evt.viewState)}
+        style={{ width: '100%', height: '100%', minHeight: '500px' }}
+        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapboxAccessToken={MAPBOX_TOKEN}
+        interactiveLayerIds={drawingEnabled ? [] : undefined}
+        dragPan={!drawingEnabled}
+        scrollZoom={!drawingEnabled}
+        doubleClickZoom={!drawingEnabled}
+      >
+        {/* Map Controls */}
+        &lt;NavigationControl position="bottom-right" showCompass={true} />
+        &lt;FullscreenControl position="bottom-right" />
+        &lt;GeolocateControl 
+          position="bottom-right" 
+          trackUserLocation={true}
+          showUserHeading={true}
+        />
+        &lt;ScaleControl position="bottom-left" unit="imperial" />
+
+        {/* Render ONLY filtered markers when boundary exists, otherwise all */}
+        {displayProperties.map((property, index) => {
+          const coords = getCoords(property);
+          if (!coords) return null;
+
+          const isSelected = externalSelectedProperty?.property_id === property.property_id ||
+                            selectedProperty?.property_id === property.property_id;
+
+          return (
+            &lt;Marker
+              key={`marker-${property.property_id}-${index}`}
+              longitude={coords.lng}
+              latitude={coords.lat}
+              anchor="bottom"
+            >
+              &lt;PropertyMarker
+                property={property}
+                isSelected={isSelected}
+                onClick={(e) => handleMarkerClick(property, e)}
+              />
+            &lt;/Marker>
+          );
+        })}
+
+        {/* Popup */}
+        {selectedProperty &amp;&amp; !drawingEnabled &amp;&amp; (
+          &lt;Popup
+            longitude={getCoords(selectedProperty)?.lng}
+            latitude={getCoords(selectedProperty)?.lat}
+            onClose={() => setSelectedProperty(null)}
+            closeOnClick={false}
+            maxWidth="320px"
+            anchor="bottom"
+            offset={25}
+          >
+            &lt;div className="min-w-[280px]">
+              {(selectedProperty.primary_photo?.href || selectedProperty.thumbnail) &amp;&amp; (
+                &lt;img
+                  src={selectedProperty.primary_photo?.href || selectedProperty.thumbnail}
+                  alt="Property"
+                  className="w-full h-36 object-cover rounded-t-lg"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              )}
+
+              &lt;div className="p-3 space-y-2">
+                {(() => {
+                  const score = calculateInvestmentScore(selectedProperty);
+                  const color = getScoreColor(score);
+                  const label = getScoreLabel(score);
+                  return (
+                    &lt;div 
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-bold text-white"
+                      style={{ backgroundColor: color }}
+                    >
+                      &lt;span>{score}&lt;/span>
+                      &lt;span>•&lt;/span>
+                      &lt;span>{label}&lt;/span>
+                    &lt;/div>
+                  );
+                })()}
+
+                &lt;h3 className="font-semibold text-gray-900 text-sm leading-tight">
+                  {selectedProperty.location?.address?.line || selectedProperty.address || 'Address unavailable'}
+                &lt;/h3>
+                &lt;p className="text-xs text-gray-500">
+                  {selectedProperty.location?.address?.city || selectedProperty.city}, {selectedProperty.location?.address?.state_code || selectedProperty.state}
+                &lt;/p>
+
+                &lt;div className="flex items-center justify-between">
+                  &lt;p className="text-lg font-bold text-gray-900">
+                    {formatPrice(selectedProperty.list_price || selectedProperty.price)}
+                  &lt;/p>
+                  &lt;p className="text-sm text-green-600 font-medium">
+                    ~{formatPrice(estimateRent(selectedProperty))}/mo
+                  &lt;/p>
+                &lt;/div>
+
+                &lt;div className="flex gap-3 text-xs text-gray-600 pb-2 border-b">
+                  {(selectedProperty.description?.beds || selectedProperty.beds) &amp;&amp; (
+                    &lt;span>{selectedProperty.description?.beds || selectedProperty.beds} beds&lt;/span>
+                  )}
+                  {(selectedProperty.description?.baths || selectedProperty.baths) &amp;&amp; (
+                    &lt;span>{selectedProperty.description?.baths || selectedProperty.baths} baths&lt;/span>
+                  )}
+                  {(selectedProperty.description?.sqft || selectedProperty.sqft) &amp;&amp; (
+                    &lt;span>{(selectedProperty.description?.sqft || selectedProperty.sqft).toLocaleString()} sqft&lt;/span>
+                  )}
+                &lt;/div>
+
+                {(() => {
+                  const price = selectedProperty.list_price || selectedProperty.price || 0;
+                  const rent = estimateRent(selectedProperty);
+                  const grossYield = price ? ((rent * 12) / price * 100).toFixed(1) : 0;
+                  const capRate = price ? ((rent * 12 * 0.65) / price * 100).toFixed(1) : 0;
+                  
+                  return (
+                    &lt;div className="grid grid-cols-2 gap-2 text-xs">
+                      &lt;div className="bg-gray-50 p-2 rounded">
+                        &lt;p className="text-gray-500">Gross Yield&lt;/p>
+                        &lt;p className="font-bold text-gray-900">{grossYield}%&lt;/p>
+                      &lt;/div>
+                      &lt;div className="bg-gray-50 p-2 rounded">
+                        &lt;p className="text-gray-500">Est. Cap Rate&lt;/p>
+                        &lt;p className="font-bold text-gray-900">{capRate}%&lt;/p>
+                      &lt;/div>
+                    &lt;/div>
+                  );
+                })()}
+
+                &lt;button
+                  onClick={() => onPropertyClick &amp;&amp; onPropertyClick(selectedProperty)}
+                  className="w-full mt-2 px-3 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  &lt;svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  &lt;/svg>
+                  View Analysis
+                &lt;/button>
+              &lt;/div>
+            &lt;/div>
+          &lt;/Popup>
+        )}
+      &lt;/Map>
+    &lt;/div>
+  );
+};
+
+export default PropertyMap;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

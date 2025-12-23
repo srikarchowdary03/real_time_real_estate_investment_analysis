@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Module: components/analysis/BuyHoldProjections</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Module: components/analysis/BuyHoldProjections</h1>
+
+    
+
+
+
+
+<section>
+
+<header>
+    
+        
+            
+        
+            
+        
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+        
+            <div class="description">30-year investment projection analysis for buy-and-hold rental properties.
+Calculates year-by-year projections for rental income, expenses, cash flow, equity,
+property value appreciation, loan amortization, tax benefits, and investment returns.
+
+Projection Components:
+- Rental Income: Gross rents, vacancy, operating income
+- Operating Expenses: Taxes, insurance, management, maintenance, CapEx
+- Cash Flow: NOI, debt service, pre-tax and post-tax cash flow
+- Tax Benefits: Deductions (expenses, interest, depreciation)
+- Equity Accumulation: Property value, loan balance, total equity
+- Sale Analysis: Proceeds, cumulative cash flow, total profit
+- Investment Returns: Cap Rate, CoC, ROE, ROI, IRR
+- Financial Ratios: Rent-to-value, GRM, DCR, Break-even, Debt yield, Equity multiple
+
+Calculations Include:
+- Annual property appreciation
+- Rental income growth
+- Operating expense inflation
+- Monthly loan amortization
+- 27.5-year straight-line depreciation
+- Tax deductions and savings
+- Cumulative cash flows
+- Sale proceeds with selling costs
+- IRR (Internal Rate of Return)</div>
+        
+
+        
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+    <dt class="tag-version">Version:</dt>
+    <dd class="tag-version"><ul class="dummy"><li>1.0.0</li></ul></dd>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="components_analysis_Buyholdprojections.jsx.html">components/analysis/Buyholdprojections.jsx</a>, <a href="components_analysis_Buyholdprojections.jsx.html#line1">line 1</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="module:components/analysis/BuyHoldProjections"><span class="type-signature"></span>(require("components/analysis/BuyHoldProjections"))<span class="signature">(props)</span><span class="type-signature"> &rarr; {React.ReactElement}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Buy & Hold Projections Component
+
+Displays comprehensive 30-year projections for rental property investment.
+Shows selected years (1, 2, 3, 5, 10, 20, 30) in tabular format with
+charts for cash flow and equity over time.
+
+PROJECTION METHODOLOGY:
+- Property appreciates annually at specified rate
+- Rental income grows annually
+- Operating expenses inflate annually
+- Loan amortizes monthly (principal + interest)
+- Depreciation: 27.5-year straight-line (85% of value)
+- Tax benefits: Deductions × 25% tax rate (simplified)
+- Sale proceeds: Value - Loan - Selling costs
+- IRR: Internal rate of return calculation
+
+SECTIONS DISPLAYED:
+1. Projection Settings (top cards)
+2. Rental Income table
+3. Operating Expenses table
+4. Cash Flow table
+5. Tax Benefits & Deductions table
+6. Equity Accumulation table
+7. Sale Analysis table
+8. Investment Returns table
+9. Financial Ratios table
+10. Charts: Cash Flow Over Time, Equity Over Time
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>props</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Component props
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>property</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Property data</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>inputs</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Calculation inputs
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>appreciationRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Annual appreciation %</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>incomeGrowthRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Annual rent growth %</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>expenseGrowthRate</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Annual expense inflation %</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>sellingCosts</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Selling costs %</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>results</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Analysis results from BuyRentHoldCalculator</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="components_analysis_Buyholdprojections.jsx.html">components/analysis/Buyholdprojections.jsx</a>, <a href="components_analysis_Buyholdprojections.jsx.html#line246">line 246</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    30-year projections display
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">React.ReactElement</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+    <h5>Example</h5>
+    
+    <pre class="prettyprint"><code>&lt;BuyHoldProjections
+  property={propertyData}
+  inputs={calculationInputs}
+  results={analysisResults}
+/></code></pre>
+
+
+
+        
+    
+    </div>
+
+    
+
+    
+        <h3 class="subsection-title">Requires</h3>
+
+        <ul>
+            <li>module:react</li>
+        
+            <li>module:../../utils/investmentCalculations</li>
+        </ul>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~SimpleLineChart"><span class="type-signature">(async, inner) </span>SimpleLineChart<span class="signature">(props)</span><span class="type-signature"> &rarr; {React.ReactElement}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    Simple SVG Line Chart Component
+
+Fallback chart component for visualizing projections without external libraries.
+Renders SVG line chart with multiple datasets, grid lines, axes, and legend.
+
+Features:
+- Auto-scales to data range
+- Multiple dataset support (different colored lines)
+- Grid lines and value labels
+- X-axis labels (every 5 years)
+- Interactive legend
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>props</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Component props
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>data</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Chart data object
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>labels</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array.&lt;string></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">X-axis labels (year names)</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>datasets</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array.&lt;Object></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Array of data series
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>label</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Series label</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>data</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array.&lt;number></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Y values</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>borderColor</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Line color</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>title</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">Chart title</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="components_analysis_Buyholdprojections.jsx.html">components/analysis/Buyholdprojections.jsx</a>, <a href="components_analysis_Buyholdprojections.jsx.html#line76">line 76</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    SVG line chart
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">React.ReactElement</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+    <h5>Example</h5>
+    
+    <pre class="prettyprint"><code>&lt;SimpleLineChart
+  data={{
+    labels: ['Year 1', 'Year 2', 'Year 3'],
+    datasets: [{
+      label: 'Cash Flow',
+      data: [5000, 5500, 6000],
+      borderColor: '#10b981'
+    }]
+  }}
+  title="Cash Flow Over Time"
+/></code></pre>
+
+
+
+        
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

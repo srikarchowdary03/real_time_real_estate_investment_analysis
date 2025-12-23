@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/analysis/Buyholdprojections.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/analysis/Buyholdprojections.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file Buy and Hold projections component
+ * @module components/analysis/BuyHoldProjections
+ * @description 30-year investment projection analysis for buy-and-hold rental properties.
+ * Calculates year-by-year projections for rental income, expenses, cash flow, equity,
+ * property value appreciation, loan amortization, tax benefits, and investment returns.
+ * 
+ * Projection Components:
+ * - Rental Income: Gross rents, vacancy, operating income
+ * - Operating Expenses: Taxes, insurance, management, maintenance, CapEx
+ * - Cash Flow: NOI, debt service, pre-tax and post-tax cash flow
+ * - Tax Benefits: Deductions (expenses, interest, depreciation)
+ * - Equity Accumulation: Property value, loan balance, total equity
+ * - Sale Analysis: Proceeds, cumulative cash flow, total profit
+ * - Investment Returns: Cap Rate, CoC, ROE, ROI, IRR
+ * - Financial Ratios: Rent-to-value, GRM, DCR, Break-even, Debt yield, Equity multiple
+ * 
+ * Calculations Include:
+ * - Annual property appreciation
+ * - Rental income growth
+ * - Operating expense inflation
+ * - Monthly loan amortization
+ * - 27.5-year straight-line depreciation
+ * - Tax deductions and savings
+ * - Cumulative cash flows
+ * - Sale proceeds with selling costs
+ * - IRR (Internal Rate of Return)
+ * 
+ * @requires react
+ * @requires ../../utils/investmentCalculations
+ * 
+ * @version 1.0.0
+ */
+import { useState } from 'react';
+
+/**
+ * Simple SVG Line Chart Component
+ * 
+ * Fallback chart component for visualizing projections without external libraries.
+ * Renders SVG line chart with multiple datasets, grid lines, axes, and legend.
+ * 
+ * Features:
+ * - Auto-scales to data range
+ * - Multiple dataset support (different colored lines)
+ * - Grid lines and value labels
+ * - X-axis labels (every 5 years)
+ * - Interactive legend
+ * 
+ * @async
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.data - Chart data object
+ * @param {Array&lt;string>} props.data.labels - X-axis labels (year names)
+ * @param {Array&lt;Object>} props.data.datasets - Array of data series
+ * @param {string} props.data.datasets[].label - Series label
+ * @param {Array&lt;number>} props.data.datasets[].data - Y values
+ * @param {string} props.data.datasets[].borderColor - Line color
+ * @param {string} props.title - Chart title
+ * @returns {React.ReactElement} SVG line chart
+ * 
+ * @example
+ * &lt;SimpleLineChart
+ *   data={{
+ *     labels: ['Year 1', 'Year 2', 'Year 3'],
+ *     datasets: [{
+ *       label: 'Cash Flow',
+ *       data: [5000, 5500, 6000],
+ *       borderColor: '#10b981'
+ *     }]
+ *   }}
+ *   title="Cash Flow Over Time"
+ * />
+ */
+
+// Simple SVG Line Chart Component (fallback until Chart.js is installed)
+const SimpleLineChart = ({ data, title }) => {
+  const datasets = data.datasets;
+  const labels = data.labels;
+  
+  // Calculate min/max for scaling
+  const allValues = datasets.flatMap(ds => ds.data);
+  const maxValue = Math.max(...allValues);
+  const minValue = Math.min(...allValues, 0);
+  const range = maxValue - minValue || 1;
+  
+  const width = 800;
+  const height = 300;
+  const padding = 40;
+  
+    /**
+   * Scale Y value to SVG coordinates
+   * @param {number} value - Data value
+   * @returns {number} SVG Y coordinate
+   */
+  const scaleY = (value) => {
+    return height - padding - ((value - minValue) / range) * (height - 2 * padding);
+  };
+  
+    /**
+   * Scale X index to SVG coordinates
+   * @param {number} index - Data point index
+   * @returns {number} SVG X coordinate
+   */
+  const scaleX = (index) => {
+    return padding + (index / (labels.length - 1)) * (width - 2 * padding);
+  };
+  
+  return (
+    &lt;div className="w-full overflow-x-auto">
+      &lt;div className="text-sm font-medium text-gray-700 mb-2">{title}&lt;/div>
+      &lt;svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 border border-gray-200 rounded bg-white" preserveAspectRatio="xMidYMid meet">
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((percent) => {
+          const y = height - padding - percent * (height - 2 * padding);
+          const value = minValue + percent * range;
+          return (
+            &lt;g key={percent}>
+              &lt;line
+                x1={padding}
+                y1={y}
+                x2={width - padding}
+                y2={y}
+                stroke="#e5e7eb"
+                strokeWidth="1"
+              />
+              &lt;text
+                x={padding - 5}
+                y={y + 4}
+                textAnchor="end"
+                fontSize="10"
+                fill="#6b7280"
+              >
+                ${(value / 1000).toFixed(0)}k
+              &lt;/text>
+            &lt;/g>
+          );
+        })}
+        
+        {/* Draw lines for each dataset */}
+        {datasets.map((dataset, dsIndex) => {
+          const points = dataset.data.map((value, index) => ({
+            x: scaleX(index),
+            y: scaleY(value)
+          }));
+          
+          const pathData = points
+            .map((point, i) => `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+            .join(' ');
+          
+          return (
+            &lt;path
+              key={dsIndex}
+              d={pathData}
+              fill="none"
+              stroke={dataset.borderColor}
+              strokeWidth="2"
+            />
+          );
+        })}
+        
+        {/* X-axis labels */}
+        {labels.filter((_, i) => [0, 4, 9, 14, 19, 24, 29].includes(i)).map((label, i) => {
+          const indices = [0, 4, 9, 14, 19, 24, 29];
+          const actualIndex = indices[i];
+          if (actualIndex &lt; labels.length) {
+            return (
+              &lt;text
+                key={i}
+                x={scaleX(actualIndex)}
+                y={height - padding + 20}
+                textAnchor="middle"
+                fontSize="10"
+                fill="#6b7280"
+              >
+                {labels[actualIndex]}
+              &lt;/text>
+            );
+          }
+          return null;
+        })}
+      &lt;/svg>
+      
+      {/* Legend */}
+      &lt;div className="flex gap-4 justify-center mt-2 flex-wrap">
+        {datasets.map((dataset, i) => (
+          &lt;div key={i} className="flex items-center gap-2">
+            &lt;div
+              className="w-4 h-0.5"
+              style={{ backgroundColor: dataset.borderColor }}
+            />
+            &lt;span className="text-xs text-gray-600">{dataset.label}&lt;/span>
+          &lt;/div>
+        ))}
+      &lt;/div>
+    &lt;/div>
+  );
+};
+
+/**
+ * Buy &amp; Hold Projections Component
+ * 
+ * Displays comprehensive 30-year projections for rental property investment.
+ * Shows selected years (1, 2, 3, 5, 10, 20, 30) in tabular format with
+ * charts for cash flow and equity over time.
+ * 
+ * PROJECTION METHODOLOGY:
+ * - Property appreciates annually at specified rate
+ * - Rental income grows annually
+ * - Operating expenses inflate annually
+ * - Loan amortizes monthly (principal + interest)
+ * - Depreciation: 27.5-year straight-line (85% of value)
+ * - Tax benefits: Deductions × 25% tax rate (simplified)
+ * - Sale proceeds: Value - Loan - Selling costs
+ * - IRR: Internal rate of return calculation
+ * 
+ * SECTIONS DISPLAYED:
+ * 1. Projection Settings (top cards)
+ * 2. Rental Income table
+ * 3. Operating Expenses table
+ * 4. Cash Flow table
+ * 5. Tax Benefits &amp; Deductions table
+ * 6. Equity Accumulation table
+ * 7. Sale Analysis table
+ * 8. Investment Returns table
+ * 9. Financial Ratios table
+ * 10. Charts: Cash Flow Over Time, Equity Over Time
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data
+ * @param {Object} props.inputs - Calculation inputs
+ * @param {number} props.inputs.appreciationRate - Annual appreciation %
+ * @param {number} props.inputs.incomeGrowthRate - Annual rent growth %
+ * @param {number} props.inputs.expenseGrowthRate - Annual expense inflation %
+ * @param {number} props.inputs.sellingCosts - Selling costs %
+ * @param {Object} props.results - Analysis results from BuyRentHoldCalculator
+ * @returns {React.ReactElement} 30-year projections display
+ * 
+ * @example
+ * &lt;BuyHoldProjections
+ *   property={propertyData}
+ *   inputs={calculationInputs}
+ *   results={analysisResults}
+ * />
+ */
+export default function BuyHoldProjections({ property, inputs, results }) {
+   /**
+   * Selected years to display in tables
+   * Shows key milestones: 1, 2, 3, 5, 10, 20, 30
+   */
+  const [selectedYears] = useState([1, 2, 3, 5, 10, 20, 30]);
+    /**
+   * Format number as USD currency
+   * @function
+   * @param {number} value - Dollar amount
+   * @returns {string} Formatted currency
+   */
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '$0';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+    /**
+   * Format number as percentage
+   * @function
+   * @param {number} value - Percentage value
+   * @returns {string} Formatted percentage
+   */
+  const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
+    return `${value.toFixed(1)}%`;
+  };
+
+  // Safety check for results
+    /**
+   * Safety check for results
+   * Returns loading state if results not ready
+   */
+  if (!results || !results.propertyInfo || !results.financing) {
+    return (
+      &lt;div className="max-w-7xl mx-auto p-6">
+        &lt;div className="text-center py-12">
+          &lt;h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Projections...&lt;/h2>
+          &lt;p className="text-gray-500">Please wait while we calculate your investment projections.&lt;/p>
+        &lt;/div>
+      &lt;/div>
+    );
+  }
+
+   /**
+   * Calculate 30-year projections
+   * 
+   * COMPREHENSIVE PROJECTION ALGORITHM:
+   * 
+   * For each year (1-30):
+   * 1. Property Value: Previous value × (1 + appreciation rate)
+   * 2. Gross Rents: Starting rent × (1 + income growth)^(year-1)
+   * 3. Vacancy Loss: Gross rent × vacancy rate
+   * 4. Operating Income: Gross rent - vacancy
+   * 5. Operating Expenses: Each expense × (1 + expense growth)^(year-1)
+   * 6. NOI: Operating income - operating expenses
+   * 7. Loan Payments: Monthly payment × 12
+   * 8. Cash Flow: NOI - loan payments
+   * 9. Loan Amortization: Month-by-month principal/interest split
+   * 10. Tax Benefits: Depreciation + deductions × tax rate
+   * 11. Post-Tax Cash Flow: Cash flow + tax savings
+   * 12. Equity: Property value - loan balance
+   * 13. Sale Proceeds: Equity - selling costs
+   * 14. Investment Metrics: Cap rate, CoC, ROE, ROI, IRR
+   * 15. Financial Ratios: Rent-to-value, GRM, DCR, etc.
+   * 
+   * @function
+   * @returns {Array&lt;Object>} Array of 30 yearly projection objects
+   * @returns {number} returns[].year - Year number (1-30)
+   * @returns {number} returns[].propertyValue - Property value
+   * @returns {number} returns[].grossRents - Annual gross rents
+   * @returns {number} returns[].operatingExpenses - Annual operating expenses
+   * @returns {number} returns[].noi - Net Operating Income
+   * @returns {number} returns[].cashFlow - Annual cash flow
+   * @returns {number} returns[].loanBalance - Remaining loan balance
+   * @returns {number} returns[].totalEquity - Equity position
+   * @returns {number} returns[].saleProceeds - Proceeds if sold this year
+   * @returns {number} returns[].cumulativeCashFlow - Total cash flow to date
+   * @returns {number} returns[].totalProfit - Total profit if sold this year
+   * @returns {number} returns[].capRatePurchase - Cap rate on purchase price
+   * @returns {number} returns[].cashOnCash - Cash-on-Cash return %
+   * @returns {number} returns[].irr - Internal Rate of Return %
+   * 
+   * @example
+   * const projections = calculateProjections();
+   * console.log(projections[4]); // Year 5 data
+   * // {
+   * //   year: 5,
+   * //   propertyValue: 289543,
+   * //   cashFlow: 6234,
+   * //   totalEquity: 94231,
+   * //   capRatePurchase: 7.2,
+   * //   ...
+   * // }
+   */
+  const calculateProjections = () => {
+    const projections = [];
+    const appreciationRate = (inputs.appreciationRate || 3) / 100;
+    const incomeGrowthRate = (inputs.incomeGrowthRate || 2) / 100;
+    const expenseGrowthRate = (inputs.expenseGrowthRate || 2) / 100;
+
+    let propertyValue = results.propertyInfo.fairMarketValue || inputs.offerPrice || 0;
+    let loanBalance = results.financing?.firstMtg?.totalPrincipal || 0;
+    
+    const monthlyPayment = results.financing?.firstMtg?.monthlyPayment || 0;
+    const monthlyRate = (results.financing?.firstMtg?.rate || 7) / 100 / 12;
+
+    for (let year = 1; year &lt;= 30; year++) {
+      // Property value with appreciation
+      propertyValue = propertyValue * (1 + appreciationRate);
+      
+      // Rental income with growth
+      const grossRents = (results.income?.grossRents || inputs.grossRents || 0) * Math.pow(1 + incomeGrowthRate, year - 1);
+      const vacancyLoss = grossRents * ((results.propertyInfo?.vacancyRate || inputs.vacancyRate || 5) / 100);
+      const operatingIncome = grossRents - vacancyLoss;
+      
+      // Operating expenses with growth
+      const propertyTaxes = (results.expenses?.propertyTaxes || inputs.propertyTaxes || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
+      const insurance = (results.expenses?.insurance || inputs.insurance || 0) * Math.pow(1 + expenseGrowthRate, year - 1);
+      const propertyManagement = operatingIncome * ((results.propertyInfo?.managementRate || inputs.managementRate || 8) / 100);
+      const maintenance = grossRents * ((inputs.maintenancePercent || inputs.repairsPercent || 5) / 100);
+      const capEx = grossRents * ((inputs.capExPercent || 5) / 100);
+      
+      const operatingExpenses = propertyTaxes + insurance + propertyManagement + maintenance + capEx;
+      
+      // NOI and cash flow
+      const noi = operatingIncome - operatingExpenses;
+      const loanPayments = monthlyPayment * 12;
+      const cashFlow = noi - loanPayments;
+      
+      // Loan amortization
+      let yearlyPrincipal = 0;
+      let yearlyInterest = 0;
+      let startingBalance = loanBalance;
+      
+      for (let month = 1; month &lt;= 12; month++) {
+        const interest = loanBalance * monthlyRate;
+        const principal = monthlyPayment - interest;
+        yearlyInterest += interest;
+        yearlyPrincipal += principal;
+        loanBalance = Math.max(0, loanBalance - principal);
+      }
+      
+      // Tax benefits
+      const depreciation = year &lt;= 27.5 ? (propertyValue * 0.85) / 27.5 : 0;
+      const totalDeductions = operatingExpenses + yearlyInterest + depreciation;
+      
+      // Post-tax cash flow (simplified - assumes 25% tax rate)
+      const taxSavings = totalDeductions * 0.25;
+      const postTaxCashFlow = cashFlow + taxSavings;
+      
+      // Equity
+      const totalEquity = propertyValue - loanBalance;
+      
+      // Sale analysis
+      const sellingCosts = propertyValue * ((inputs.sellingCosts || 6) / 100);
+      const saleProceeds = propertyValue - sellingCosts - loanBalance;
+      const cumulativeCashFlow = projections.reduce((sum, p) => sum + p.cashFlow, 0) + cashFlow;
+      const totalCashInvested = results.cashRequirements?.totalCashRequired || 0;
+      const totalProfit = saleProceeds + cumulativeCashFlow - totalCashInvested;
+      
+      // Investment returns
+      const purchasePrice = results.purchase?.realPurchasePrice || inputs.offerPrice || propertyValue;
+      const capRatePurchase = purchasePrice > 0 ? (noi / purchasePrice) * 100 : 0;
+      const capRateMarket = propertyValue > 0 ? (noi / propertyValue) * 100 : 0;
+      const cashOnCash = totalCashInvested > 0 ? (cashFlow / totalCashInvested) * 100 : 0;
+      const returnOnEquity = totalEquity > 0 ? (cashFlow / totalEquity) * 100 : 0;
+      const roi = totalCashInvested > 0 ? ((cashFlow + yearlyPrincipal) / totalCashInvested) * 100 : 0;
+      
+      // Calculate IRR (simplified)
+      const totalReturn = totalCashInvested > 0 ? (saleProceeds + cumulativeCashFlow) / totalCashInvested : 0;
+      const irr = totalReturn > 0 ? (Math.pow(totalReturn, 1 / year) - 1) * 100 : 0;
+      
+      // Financial ratios
+      const rentToValue = propertyValue > 0 ? (grossRents / 12 / propertyValue) * 100 : 0;
+      const grm = grossRents > 0 ? propertyValue / grossRents : 0;
+      const dcr = loanPayments > 0 ? noi / loanPayments : 0;
+      const breakEvenRatio = operatingIncome > 0 ? ((operatingExpenses + loanPayments) / operatingIncome) * 100 : 0;
+      const debtYield = startingBalance > 0 ? (noi / startingBalance) * 100 : 0;
+      const equityMultiple = totalCashInvested > 0 ? (saleProceeds + cumulativeCashFlow) / totalCashInvested : 0;
+      
+      projections.push({
+        year,
+        grossRents,
+        vacancy: vacancyLoss,
+        vacancyRate: results.propertyInfo?.vacancyRate || inputs.vacancyRate || 5,
+        operatingIncome,
+        incomeIncrease: incomeGrowthRate * 100,
+        propertyTaxes,
+        insurance,
+        propertyManagement,
+        maintenance,
+        capEx,
+        operatingExpenses,
+        expenseIncrease: expenseGrowthRate * 100,
+        expenseRatio: operatingIncome > 0 ? (operatingExpenses / operatingIncome) * 100 : 0,
+        noi,
+        loanPayments,
+        cashFlow,
+        postTaxCashFlow,
+        operatingExpensesDeduction: operatingExpenses,
+        loanInterest: yearlyInterest,
+        depreciation,
+        totalDeductions,
+        propertyValue,
+        appreciation: appreciationRate * 100,
+        loanBalance,
+        ltvRatio: propertyValue > 0 ? (loanBalance / propertyValue) * 100 : 0,
+        totalEquity,
+        principalPaid: yearlyPrincipal,
+        sellingCosts,
+        saleProceeds,
+        cumulativeCashFlow,
+        totalCashInvested,
+        totalProfit,
+        capRatePurchase,
+        capRateMarket,
+        cashOnCash,
+        returnOnEquity,
+        roi,
+        irr,
+        rentToValue,
+        grm,
+        dcr,
+        breakEvenRatio,
+        debtYield,
+        equityMultiple
+      });
+    }
+
+    return projections;
+  };
+
+    /**
+   * 30-year projection data
+   */
+  const projections = calculateProjections();
+
+   /**
+   * Cash flow chart data
+   * Shows operating income, expenses, and net cash flow over 30 years
+   * @type {Object}
+   */
+  const cashFlowChartData = {
+    labels: projections.map(p => `Year ${p.year}`),
+    datasets: [
+      {
+        label: 'Operating Income',
+        data: projections.map(p => p.operatingIncome),
+        borderColor: '#3b82f6',
+        tension: 0.4,
+      },
+      {
+        label: 'Operating Expenses',
+        data: projections.map(p => p.operatingExpenses),
+        borderColor: '#ef4444',
+        tension: 0.4,
+      },
+      {
+        label: 'Cash Flow',
+        data: projections.map(p => p.cashFlow),
+        borderColor: '#10b981',
+        tension: 0.4,
+      },
+    ],
+  };
+
+    /**
+   * Equity chart data
+   * Shows property value, loan balance, and total equity over 30 years
+   * @type {Object}
+   */
+  const equityChartData = {
+    labels: projections.map(p => `Year ${p.year}`),
+    datasets: [
+      {
+        label: 'Property Value',
+        data: projections.map(p => p.propertyValue),
+        borderColor: '#3b82f6',
+        tension: 0.4,
+      },
+      {
+        label: 'Loan Balance',
+        data: projections.map(p => p.loanBalance),
+        borderColor: '#ef4444',
+        tension: 0.4,
+      },
+      {
+        label: 'Total Equity',
+        data: projections.map(p => p.totalEquity),
+        borderColor: '#10b981',
+        tension: 0.4,
+      },
+    ],
+  };
+
+  return (
+    &lt;div className="max-w-7xl mx-auto p-6">
+      {/* Header - Simplified, no buttons */}
+      &lt;div className="mb-6">
+        &lt;h1 className="text-3xl font-bold text-gray-900 mb-2">Buy &amp; Hold Projections&lt;/h1>
+        &lt;p className="text-gray-600">
+          These projections show how this property will perform as a rental in the future.
+        &lt;/p>
+      &lt;/div>
+
+      {/* Projection Settings */}
+      &lt;div className="grid grid-cols-4 gap-4 mb-6">
+        &lt;div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          &lt;div className="text-sm text-blue-600 mb-1">APPRECIATION&lt;/div>
+          &lt;div className="text-2xl font-bold text-blue-900">{inputs.appreciationRate || 3}% Per Year&lt;/div>
+        &lt;/div>
+        &lt;div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          &lt;div className="text-sm text-blue-600 mb-1">INCOME INCREASE&lt;/div>
+          &lt;div className="text-2xl font-bold text-blue-900">{inputs.incomeGrowthRate || 2}% Per Year&lt;/div>
+        &lt;/div>
+        &lt;div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          &lt;div className="text-sm text-blue-600 mb-1">EXPENSE INCREASE&lt;/div>
+          &lt;div className="text-2xl font-bold text-blue-900">{inputs.expenseGrowthRate || 2}% Per Year&lt;/div>
+        &lt;/div>
+        &lt;div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          &lt;div className="text-sm text-blue-600 mb-1">SELLING COSTS&lt;/div>
+          &lt;div className="text-2xl font-bold text-blue-900">{inputs.sellingCosts || 6}% of Price&lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* Year Headers */}
+      &lt;div className="grid grid-cols-8 gap-2 mb-6 text-center font-bold text-gray-700">
+        &lt;div>&lt;/div>
+        {selectedYears.map(year => (
+          &lt;div key={year}>Year {year}&lt;/div>
+        ))}
+      &lt;/div>
+
+      {/* RENTAL INCOME */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">RENTAL INCOME&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div className="font-medium">Gross Rent:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].grossRents)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div className="font-medium">Vacancy:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">
+                - {formatCurrency(projections[year-1].vacancy)}
+                &lt;div className="text-xs text-gray-500">{projections[year-1].vacancyRate}%&lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Operating Income:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold text-blue-600">
+                = {formatCurrency(projections[year-1].operatingIncome)}
+                &lt;div className="text-xs text-blue-600">Income Increase: {projections[year-1].incomeIncrease}%&lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* OPERATING EXPENSES */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">OPERATING EXPENSES&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Property Taxes:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].propertyTaxes)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Insurance:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].insurance)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Property Management:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].propertyManagement)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Maintenance:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].maintenance)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Capital Expenditures:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].capEx)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Operating Expenses:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold text-blue-600">
+                = {formatCurrency(projections[year-1].operatingExpenses)}
+                &lt;div className="text-xs text-blue-600">
+                  Expense Increase: {projections[year-1].expenseIncrease}%
+                &lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* Charts */}
+      &lt;div className="grid grid-cols-1 gap-6 mb-6">
+        &lt;div className="bg-white rounded-lg border border-gray-200 p-6">
+          &lt;SimpleLineChart 
+            data={cashFlowChartData} 
+            title="Cash Flow Over Time"
+          />
+        &lt;/div>
+
+        &lt;div className="bg-white rounded-lg border border-gray-200 p-6">
+          &lt;SimpleLineChart 
+            data={equityChartData} 
+            title="Equity Over Time"
+          />
+        &lt;/div>
+      &lt;/div>
+
+      {/* CASH FLOW */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">CASH FLOW&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Operating Income:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].operatingIncome)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Operating Expenses:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">
+                - {formatCurrency(projections[year-1].operatingExpenses)}
+                &lt;div className="text-xs text-gray-500">
+                  {projections[year-1].expenseRatio.toFixed(1)}%
+                &lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b bg-gray-50">
+            &lt;div className="font-bold">Net Operating Income:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold">
+                = {formatCurrency(projections[year-1].noi)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Loan Payments:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">- {formatCurrency(projections[year-1].loanPayments)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Cash Flow:&lt;/div>
+            {selectedYears.map(year => {
+              const cf = projections[year-1].cashFlow;
+              return (
+                &lt;div key={year} className={`text-right font-bold ${cf >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  = {formatCurrency(cf)}
+                &lt;/div>
+              );
+            })}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2">
+            &lt;div>Post-Tax Cash Flow:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].postTaxCashFlow)}&lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* TAX BENEFITS &amp; DEDUCTIONS */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">TAX BENEFITS &amp; DEDUCTIONS&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Operating Expenses:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].operatingExpensesDeduction)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Loan Interest:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].loanInterest)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Depreciation:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].depreciation)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Total Deductions:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold text-blue-600">
+                = {formatCurrency(projections[year-1].totalDeductions)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* EQUITY ACCUMULATION */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">EQUITY ACCUMULATION&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Property Value:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">
+                {formatCurrency(projections[year-1].propertyValue)}
+                &lt;div className="text-xs text-gray-500">
+                  Appreciation: {projections[year-1].appreciation.toFixed(1)}%
+                &lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Loan Balance:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">
+                - {formatCurrency(projections[year-1].loanBalance)}
+                &lt;div className="text-xs text-gray-500">
+                  LTV Ratio: {projections[year-1].ltvRatio.toFixed(1)}%
+                &lt;/div>
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Total Equity:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold text-blue-600">
+                = {formatCurrency(projections[year-1].totalEquity)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* SALE ANALYSIS */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">SALE ANALYSIS&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Equity:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatCurrency(projections[year-1].totalEquity)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Selling Costs ({inputs.sellingCosts || 6}%):&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">- {formatCurrency(projections[year-1].sellingCosts)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Sale Proceeds:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right font-bold text-blue-600">
+                = {formatCurrency(projections[year-1].saleProceeds)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Cumulative Cash Flow:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className={`text-right ${projections[year-1].cumulativeCashFlow >= 0 ? '' : 'text-red-600'}`}>
+                {formatCurrency(projections[year-1].cumulativeCashFlow)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Total Cash Invested:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">- {formatCurrency(projections[year-1].totalCashInvested)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-green-50">
+            &lt;div className="font-bold text-green-600">Total Profit:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className={`text-right font-bold ${projections[year-1].totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                = {formatCurrency(projections[year-1].totalProfit)}
+              &lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* INVESTMENT RETURNS */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">INVESTMENT RETURNS&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Cap Rate (Purchase Price):&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatPercent(projections[year-1].capRatePurchase)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Cap Rate (Market Value):&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatPercent(projections[year-1].capRateMarket)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Cash on Cash Return:&lt;/div>
+            {selectedYears.map(year => {
+              const coc = projections[year-1].cashOnCash;
+              return (
+                &lt;div key={year} className={`text-right ${coc >= 0 ? '' : 'text-red-600'}`}>
+                  {formatPercent(coc)}
+                &lt;/div>
+              );
+            })}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Return on Equity:&lt;/div>
+            {selectedYears.map(year => {
+              const roe = projections[year-1].returnOnEquity;
+              return (
+                &lt;div key={year} className={`text-right ${roe >= 0 ? '' : 'text-red-600'}`}>
+                  {formatPercent(roe)}
+                &lt;/div>
+              );
+            })}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Return on Investment:&lt;/div>
+            {selectedYears.map(year => {
+              const roi = projections[year-1].roi;
+              return (
+                &lt;div key={year} className={`text-right ${roi >= 0 ? '' : 'text-red-600'}`}>
+                  {formatPercent(roi)}
+                &lt;/div>
+              );
+            })}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 bg-blue-50">
+            &lt;div className="font-bold text-blue-600">Internal Rate of Return:&lt;/div>
+            {selectedYears.map(year => {
+              const irr = projections[year-1].irr;
+              return (
+                &lt;div key={year} className={`text-right font-bold ${irr >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {formatPercent(irr)}
+                &lt;/div>
+              );
+            })}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+
+      {/* FINANCIAL RATIOS */}
+      &lt;div className="bg-white rounded-lg border border-gray-200 p-6">
+        &lt;h2 className="text-xl font-bold text-blue-600 mb-4">FINANCIAL RATIOS&lt;/h2>
+        &lt;div className="space-y-2">
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Rent to Value:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatPercent(projections[year-1].rentToValue)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Gross Rent Multiplier:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{projections[year-1].grm.toFixed(2)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Equity Multiple:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{projections[year-1].equityMultiple.toFixed(2)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Break Even Ratio:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatPercent(projections[year-1].breakEvenRatio)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2 border-b">
+            &lt;div>Debt Coverage Ratio:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{projections[year-1].dcr.toFixed(2)}&lt;/div>
+            ))}
+          &lt;/div>
+          &lt;div className="grid grid-cols-8 gap-2 py-2">
+            &lt;div>Debt Yield:&lt;/div>
+            {selectedYears.map(year => (
+              &lt;div key={year} className="text-right">{formatPercent(projections[year-1].debtYield)}&lt;/div>
+            ))}
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+    &lt;/div>
+  );
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

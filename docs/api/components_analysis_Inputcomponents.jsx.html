@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/analysis/Inputcomponents.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/analysis/Inputcomponents.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useState, useEffect, useRef } from 'react';
+
+/**
+ * CurrencyInput - Input for dollar values
+ * Uses text input with decimal inputMode for proper mobile keyboard
+ * No stepper buttons - allows direct value entry
+ */
+export function CurrencyInput({ 
+  value, 
+  onChange, 
+  label, 
+  placeholder = '0',
+  className = '',
+  disabled = false,
+  min = 0,
+  max = Infinity,
+  allowNegative = false,
+  helperText = ''
+}) {
+  const [displayValue, setDisplayValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef(null);
+
+  // Format number with commas for display
+  const formatWithCommas = (num) => {
+    if (num === null || num === undefined || num === '') return '';
+    const number = parseFloat(num);
+    if (isNaN(number)) return '';
+    return number.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  };
+
+  // Update display value when prop changes (and not focused)
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(value ? formatWithCommas(value) : '');
+    }
+  }, [value, isFocused]);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    // Show raw number on focus for easier editing
+    setDisplayValue(value ? value.toString() : '');
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    // Clean up and format
+    const cleanValue = displayValue.replace(/[^0-9.-]/g, '');
+    let numValue = parseFloat(cleanValue) || 0;
+    
+    // Apply constraints
+    if (!allowNegative &amp;&amp; numValue &lt; 0) numValue = 0;
+    if (numValue &lt; min) numValue = min;
+    if (numValue > max) numValue = max;
+    
+    onChange(numValue);
+    setDisplayValue(formatWithCommas(numValue));
+  };
+
+  const handleChange = (e) => {
+    let inputValue = e.target.value;
+    
+    // Allow only numbers, decimal, and minus (if allowed)
+    const regex = allowNegative ? /[^0-9.-]/g : /[^0-9.]/g;
+    inputValue = inputValue.replace(regex, '');
+    
+    // Prevent multiple decimals
+    const parts = inputValue.split('.');
+    if (parts.length > 2) {
+      inputValue = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    setDisplayValue(inputValue);
+    
+    // Update parent with numeric value
+    const numValue = parseFloat(inputValue) || 0;
+    onChange(numValue);
+  };
+
+  return (
+    &lt;div className={className}>
+      {label &amp;&amp; (
+        &lt;label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        &lt;/label>
+      )}
+      &lt;div className="relative">
+        &lt;span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+          $
+        &lt;/span>
+        &lt;input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          value={displayValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`
+            w-full pl-7 pr-3 py-2 
+            border border-gray-300 rounded-md
+            focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            text-right
+          `}
+        />
+      &lt;/div>
+      {helperText &amp;&amp; (
+        &lt;p className="mt-1 text-xs text-gray-500">{helperText}&lt;/p>
+      )}
+    &lt;/div>
+  );
+}
+
+/**
+ * PercentInput - Input for percentage values
+ */
+export function PercentInput({ 
+  value, 
+  onChange, 
+  label, 
+  placeholder = '0',
+  className = '',
+  disabled = false,
+  min = 0,
+  max = 100,
+  allowNegative = false,
+  decimals = 2,
+  helperText = ''
+}) {
+  const [displayValue, setDisplayValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(value !== null &amp;&amp; value !== undefined ? value.toString() : '');
+    }
+  }, [value, isFocused]);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const cleanValue = displayValue.replace(/[^0-9.-]/g, '');
+    let numValue = parseFloat(cleanValue) || 0;
+    
+    if (!allowNegative &amp;&amp; numValue &lt; 0) numValue = 0;
+    if (numValue &lt; min) numValue = min;
+    if (numValue > max) numValue = max;
+    
+    // Round to specified decimals
+    numValue = Math.round(numValue * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    
+    onChange(numValue);
+    setDisplayValue(numValue.toString());
+  };
+
+  const handleChange = (e) => {
+    let inputValue = e.target.value;
+    const regex = allowNegative ? /[^0-9.-]/g : /[^0-9.]/g;
+    inputValue = inputValue.replace(regex, '');
+    
+    const parts = inputValue.split('.');
+    if (parts.length > 2) {
+      inputValue = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    setDisplayValue(inputValue);
+    const numValue = parseFloat(inputValue) || 0;
+    onChange(numValue);
+  };
+
+  return (
+    &lt;div className={className}>
+      {label &amp;&amp; (
+        &lt;label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        &lt;/label>
+      )}
+      &lt;div className="relative">
+        &lt;input
+          type="text"
+          inputMode="decimal"
+          value={displayValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`
+            w-full pr-8 pl-3 py-2 
+            border border-gray-300 rounded-md
+            focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            text-right
+          `}
+        />
+        &lt;span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+          %
+        &lt;/span>
+      &lt;/div>
+      {helperText &amp;&amp; (
+        &lt;p className="mt-1 text-xs text-gray-500">{helperText}&lt;/p>
+      )}
+    &lt;/div>
+  );
+}
+
+/**
+ * NumberInput - Generic number input without prefix/suffix
+ */
+export function NumberInput({ 
+  value, 
+  onChange, 
+  label, 
+  placeholder = '0',
+  className = '',
+  disabled = false,
+  min,
+  max,
+  allowNegative = true,
+  allowDecimal = true,
+  decimals = 2,
+  suffix = '',
+  helperText = ''
+}) {
+  const [displayValue, setDisplayValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(value !== null &amp;&amp; value !== undefined ? value.toString() : '');
+    }
+  }, [value, isFocused]);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    let cleanValue = displayValue;
+    
+    if (allowDecimal) {
+      cleanValue = cleanValue.replace(allowNegative ? /[^0-9.-]/g : /[^0-9.]/g, '');
+    } else {
+      cleanValue = cleanValue.replace(allowNegative ? /[^0-9-]/g : /[^0-9]/g, '');
+    }
+    
+    let numValue = parseFloat(cleanValue) || 0;
+    
+    if (!allowNegative &amp;&amp; numValue &lt; 0) numValue = 0;
+    if (min !== undefined &amp;&amp; numValue &lt; min) numValue = min;
+    if (max !== undefined &amp;&amp; numValue > max) numValue = max;
+    
+    if (allowDecimal) {
+      numValue = Math.round(numValue * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    } else {
+      numValue = Math.round(numValue);
+    }
+    
+    onChange(numValue);
+    setDisplayValue(numValue.toString());
+  };
+
+  const handleChange = (e) => {
+    let inputValue = e.target.value;
+    
+    if (allowDecimal) {
+      inputValue = inputValue.replace(allowNegative ? /[^0-9.-]/g : /[^0-9.]/g, '');
+      const parts = inputValue.split('.');
+      if (parts.length > 2) {
+        inputValue = parts[0] + '.' + parts.slice(1).join('');
+      }
+    } else {
+      inputValue = inputValue.replace(allowNegative ? /[^0-9-]/g : /[^0-9]/g, '');
+    }
+    
+    setDisplayValue(inputValue);
+    const numValue = parseFloat(inputValue) || 0;
+    onChange(numValue);
+  };
+
+  return (
+    &lt;div className={className}>
+      {label &amp;&amp; (
+        &lt;label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        &lt;/label>
+      )}
+      &lt;div className="relative">
+        &lt;input
+          type="text"
+          inputMode="decimal"
+          value={displayValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`
+            w-full px-3 py-2 
+            border border-gray-300 rounded-md
+            focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            ${suffix ? 'pr-12' : ''}
+            text-right
+          `}
+        />
+        {suffix &amp;&amp; (
+          &lt;span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+            {suffix}
+          &lt;/span>
+        )}
+      &lt;/div>
+      {helperText &amp;&amp; (
+        &lt;p className="mt-1 text-xs text-gray-500">{helperText}&lt;/p>
+      )}
+    &lt;/div>
+  );
+}
+
+/**
+ * InlineInput - Compact inline input for use in data rows
+ */
+export function InlineInput({ 
+  value, 
+  onChange, 
+  prefix = '',
+  suffix = '',
+  type = 'currency', // 'currency', 'percent', 'number'
+  className = '',
+  disabled = false
+}) {
+  const [displayValue, setDisplayValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+
+  const formatValue = (val) => {
+    if (type === 'currency') {
+      return val ? val.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '';
+    }
+    return val?.toString() || '';
+  };
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayValue(formatValue(value));
+    }
+  }, [value, isFocused]);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    setDisplayValue(value ? value.toString() : '');
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const cleanValue = displayValue.replace(/[^0-9.-]/g, '');
+    const numValue = parseFloat(cleanValue) || 0;
+    onChange(numValue);
+    setDisplayValue(formatValue(numValue));
+  };
+
+  const handleChange = (e) => {
+    let inputValue = e.target.value.replace(/[^0-9.-]/g, '');
+    setDisplayValue(inputValue);
+    onChange(parseFloat(inputValue) || 0);
+  };
+
+  return (
+    &lt;div className={`inline-flex items-center ${className}`}>
+      {prefix &amp;&amp; &lt;span className="text-gray-500 mr-1">{prefix}&lt;/span>}
+      &lt;input
+        type="text"
+        inputMode="decimal"
+        value={displayValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        disabled={disabled}
+        className={`
+          w-24 px-2 py-1 
+          border border-gray-300 rounded
+          focus:ring-1 focus:ring-blue-500 focus:border-transparent
+          disabled:bg-gray-100
+          text-right text-sm
+        `}
+      />
+      {suffix &amp;&amp; &lt;span className="text-gray-500 ml-1">{suffix}&lt;/span>}
+    &lt;/div>
+  );
+}
+
+export default {
+  CurrencyInput,
+  PercentInput,
+  NumberInput,
+  InlineInput
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: services/realtyAPI.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: services/realtyAPI.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file Realty-in-US API integration for property search and listings
+ * @module services/realtyAPI
+ * @description Provides comprehensive property search functionality through the Realty-in-US API
+ * hosted on RapidAPI. Handles property searches, auto-complete, property details, photos,
+ * similar properties, and market statistics. Includes rate limiting and image quality upgrades.
+ * 
+ * @requires axios
+ * @see {@link https://rapidapi.com/datascraper/api/realty-in-us RapidAPI - Realty-in-US}
+ * 
+ * @version 1.0.0
+ */
+import axios from 'axios';
+
+/**
+ * RapidAPI key from environment variables
+ * @constant {string}
+ * @private
+ */
+const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
+/**
+ * RapidAPI host for Realty-in-US
+ * @constant {string}
+ * @private
+ */
+const RAPIDAPI_HOST = 'realty-in-us.p.rapidapi.com';
+/**
+ * Base URL for all API requests
+ * @constant {string}
+ * @private
+ */
+const BASE_URL = `https://${RAPIDAPI_HOST}`;
+
+/**
+ * Minimum time between API requests in milliseconds
+ * @constant {number}
+ * @private
+ */
+// Rate limiting
+const MIN_REQUEST_INTERVAL = 250;
+
+/**
+ * Timestamp of last API request for rate limiting
+ * @type {number}
+ * @private
+ */
+let lastRequestTime = 0;
+
+/**
+ * Wait for rate limit interval before making next request
+ * 
+ * Implements simple rate limiting to prevent API throttling. Ensures minimum
+ * 250ms between consecutive requests by calculating time since last request
+ * and waiting if necessary.
+ * 
+ * @async
+ * @function
+ * @private
+ * @returns {Promise&lt;void>}
+ * 
+ * @example
+ * await waitForRateLimit();
+ * // Now safe to make API request
+ */
+const waitForRateLimit = async () => {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest &lt; MIN_REQUEST_INTERVAL) {
+    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+};
+/**
+ * Get base configuration for API requests
+ * 
+ * Returns axios configuration object with required RapidAPI headers.
+ * 
+ * @function
+ * @private
+ * @returns {Object} Axios configuration object
+ * @returns {Object} returns.headers - HTTP headers
+ * @returns {string} returns.headers.X-RapidAPI-Key - API key
+ * @returns {string} returns.headers.X-RapidAPI-Host - API host
+ * @returns {string} returns.headers.Content-Type - Content type
+ */
+const getConfig = () => ({
+  headers: {
+    'X-RapidAPI-Key': RAPIDAPI_KEY,
+    'X-RapidAPI-Host': RAPIDAPI_HOST,
+    'Content-Type': 'application/json'
+  }
+});
+
+/**
+ * Upgrade image URL to higher quality
+ * 
+ * Transforms rdcpix.com image URLs to higher quality versions by modifying
+ * URL parameters. Realty API uses rdcpix.com with URL pattern:
+ * -m{mode}xd-w{width}_h{height}_q{quality}
+ * 
+ * @function
+ * @param {string} url - Original image URL from API
+ * @param {string} [size='large'] - Desired size preset
+ * @returns {string|null} Upgraded image URL or null if invalid
+ * 
+ * @example
+ * const thumbnail = upgradeImageUrl(url, 'medium'); // 640x480
+ * const fullSize = upgradeImageUrl(url, 'xlarge');  // 1280x960
+ */
+const upgradeImageUrl = (url, size = 'large') => {
+  if (!url) return null;
+  
+  // Only modify rdcpix.com URLs
+  if (!url.includes('rdcpix.com')) return url;
+  
+  const sizeConfigs = {
+    thumbnail: { width: 400, height: 300, quality: 80 },
+    medium: { width: 640, height: 480, quality: 85 },
+    large: { width: 1024, height: 768, quality: 90 },
+    xlarge: { width: 1280, height: 960, quality: 95 }
+  };
+  
+  const config = sizeConfigs[size] || sizeConfigs.large;
+  
+  // Replace existing size parameters or add new ones
+  let newUrl = url;
+  
+  // Pattern to match size parameters: -m0xd-w1234_h567_q89
+  const sizePattern = /-m\d*x?d?-w\d+_h\d+(_q\d+)?/;
+  const newSize = `-m0xd-w${config.width}_h${config.height}_q${config.quality}`;
+  
+  if (sizePattern.test(url)) {
+    newUrl = url.replace(sizePattern, newSize);
+  } else {
+    // Try to insert before file extension
+    const extMatch = url.match(/\.(jpg|jpeg|png|webp)(\?.*)?$/i);
+    if (extMatch) {
+      const insertPos = url.indexOf(extMatch[0]);
+      newUrl = url.slice(0, insertPos) + newSize + url.slice(insertPos);
+    }
+  }
+  
+  return newUrl;
+};
+
+/**
+ * Auto-complete location suggestions
+ * 
+ * Provides location auto-complete suggestions as user types. Returns cities,
+ * ZIP codes, and other locations with normalized format for easy use in
+ * search forms.
+ * 
+ * @async
+ * @function
+ * @param {string} input - User's search input text
+ * @param {number} [limit=10] - Maximum number of suggestions to return
+ * @returns {Promise&lt;Array&lt;Object>>} Array of location suggestions
+ * @returns {string} returns[].display - Formatted display text
+ * @returns {string} returns[].value - Value for search (city,state or ZIP)
+ * @returns {string|null} returns[].city - City name
+ * @returns {string|null} returns[].state - State code
+ * @returns {string|null} returns[].postalCode - ZIP code
+ * @returns {string} returns[].type - Location type (city/postal_code)
+ * @returns {number|null} returns[].lat - Latitude
+ * @returns {number|null} returns[].lon - Longitude
+ * 
+ * @example
+ * const suggestions = await autoCompleteLocations('Miami', 5);
+ * // Returns: [{ display: 'Miami, FL', value: 'Miami, FL', city: 'Miami', ... }]
+ */
+export const autoCompleteLocations = async (input, limit = 10) => {
+  try {
+    console.log('🔍 Auto-completing:', { input, limit });
+    
+    await waitForRateLimit();
+    
+    const response = await axios.get(`${BASE_URL}/locations/v2/auto-complete`, {
+      params: {
+        input,
+        limit
+      },
+      ...getConfig()
+    });
+    
+    console.log('✅ Auto-complete response:', response.data);
+    
+    // Normalize the autocomplete results
+    const locations = response.data?.autocomplete || [];
+    return locations.map(loc => ({
+      display: loc.area_type === 'city' 
+        ? `${loc.city}, ${loc.state_code}`
+        : loc.area_type === 'postal_code'
+        ? `${loc.postal_code} - ${loc.city}, ${loc.state_code}`
+        : loc._name || loc.name,
+      
+      value: loc.area_type === 'city' 
+        ? `${loc.city}, ${loc.state_code}`
+        : loc.area_type === 'postal_code'
+        ? loc.postal_code
+        : loc._name || loc.name,
+      
+      city: loc.city || null,
+      state: loc.state_code || null,
+      postalCode: loc.postal_code || null,
+      type: loc.area_type || 'unknown',
+      
+      lat: loc.centroid?.lat || null,
+      lon: loc.centroid?.lon || null,
+      
+      _raw: loc
+    }));
+  } catch (error) {
+    console.error('❌ Auto-complete error:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+/**
+ * Search properties using POST v3/list endpoint
+ * 
+ * Main property search function. Searches for properties by location (city/state
+ * or ZIP code) with optional filters for beds, baths, price, square footage,
+ * and property type. Returns up to 200 properties per request.
+ * 
+ * This is the CORRECT endpoint for Realty-in-US API.
+ * 
+ * @async
+ * @function
+ * @param {Object} [params={}] - Search parameters
+ * @param {string} params.location - Location (required) - city/state or ZIP code
+ * @param {number} [params.limit=200] - Max results (max: 200)
+ * @param {string} [params.status='for_sale'] - Property status
+ * @param {number} [params.beds_min] - Minimum bedrooms
+ * @param {number} [params.beds_max] - Maximum bedrooms
+ * @param {number} [params.baths_min] - Minimum bathrooms
+ * @param {number} [params.baths_max] - Maximum bathrooms
+ * @param {number} [params.price_min] - Minimum list price
+ * @param {number} [params.price_max] - Maximum list price
+ * @param {number} [params.sqft_min] - Minimum square footage
+ * @param {number} [params.sqft_max] - Maximum square footage
+ * @param {string} [params.property_type] - Property type filter
+ * @returns {Promise&lt;Array&lt;Object>>} Array of normalized property objects
+ * @throws {Error} If location is missing
+ * @throws {Error} If API returns 429 (rate limit)
+ * @throws {Error} If API returns 401 (invalid key)
+ * @throws {Error} If API returns 403 (access denied)
+ * 
+ * @example
+ * // Search by city and state
+ * const properties = await searchProperties({
+ *   location: 'Miami, FL',
+ *   limit: 50,
+ *   price_min: 200000,
+ *   price_max: 500000,
+ *   beds_min: 2
+ * });
+ * 
+ * @example
+ * // Search by ZIP code
+ * const properties = await searchProperties({
+ *   location: '33139',
+ *   property_type: 'condo'
+ * });
+ */
+export const searchProperties = async (params = {}) => {
+  try {
+    const {
+      location,
+      limit = 200,
+      status = 'for_sale',
+      ...filters
+    } = params;
+
+    if (!location) {
+      throw new Error('Location is required');
+    }
+
+    console.log('🏠 Searching properties (POST v3/list):', { location, limit, status });
+    
+    await waitForRateLimit();
+
+    // Build the request body
+    const requestBody = {
+      limit: Math.min(limit, 200),
+      offset: 0,
+      status: [status],
+      sort: {
+        direction: 'desc',
+        field: 'list_date'
+      }
+    };
+
+    // Determine location type and set appropriate field
+    const isZipCode = /^\d{5}(-\d{4})?$/.test(location.trim());
+    const isCityState = /^[a-zA-Z\s]+,\s*[A-Z]{2}$/i.test(location.trim());
+
+    if (isZipCode) {
+      requestBody.postal_code = location.trim();
+    } else if (isCityState) {
+      const [city, state] = location.split(',').map(s => s.trim());
+      requestBody.city = city;
+      requestBody.state_code = state.toUpperCase();
+    } else {
+      // Try as a general search term
+      requestBody.city = location.trim();
+    }
+
+    // Apply filters
+    if (filters.beds_min || filters.beds_max) {
+      requestBody.beds = {};
+      if (filters.beds_min) requestBody.beds.min = filters.beds_min;
+      if (filters.beds_max) requestBody.beds.max = filters.beds_max;
+    }
+
+    if (filters.baths_min || filters.baths_max) {
+      requestBody.baths = {};
+      if (filters.baths_min) requestBody.baths.min = filters.baths_min;
+      if (filters.baths_max) requestBody.baths.max = filters.baths_max;
+    }
+
+    if (filters.price_min || filters.price_max) {
+      requestBody.list_price = {};
+      if (filters.price_min) requestBody.list_price.min = filters.price_min;
+      if (filters.price_max) requestBody.list_price.max = filters.price_max;
+    }
+
+    if (filters.sqft_min || filters.sqft_max) {
+      requestBody.sqft = {};
+      if (filters.sqft_min) requestBody.sqft.min = filters.sqft_min;
+      if (filters.sqft_max) requestBody.sqft.max = filters.sqft_max;
+    }
+
+    if (filters.property_type) {
+      requestBody.type = filters.property_type;
+    }
+
+    console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+
+    const response = await axios.post(
+      `${BASE_URL}/properties/v3/list`,
+      requestBody,
+      getConfig()
+    );
+    
+    console.log('📦 API Response status:', response.status);
+    console.log('📦 Response data keys:', Object.keys(response.data || {}));
+    
+    // Extract properties from the response
+    const properties = response.data?.data?.home_search?.results || 
+                       response.data?.data?.results ||
+                       response.data?.properties ||
+                       [];
+    
+    console.log(`✅ Found ${properties.length} properties`);
+    
+    if (properties.length === 0) {
+      console.warn('⚠️ No properties found');
+      console.warn('Full response:', JSON.stringify(response.data, null, 2).substring(0, 1500));
+    } else {
+      console.log('📌 First property sample:', JSON.stringify(properties[0], null, 2).substring(0, 800));
+    }
+
+    // Normalize the properties with upgraded images
+    return properties.map(prop => normalizeProperty(prop));
+    
+  } catch (error) {
+    console.error('❌ Search properties error:');
+    console.error('- Status:', error.response?.status);
+    console.error('- Status Text:', error.response?.statusText);
+    console.error('- Data:', JSON.stringify(error.response?.data, null, 2));
+    console.error('- Message:', error.message);
+    
+    if (error.response?.status === 429) {
+      throw new Error('Too many requests. Please wait a moment.');
+    } else if (error.response?.status === 401) {
+      throw new Error('Invalid API key. Check VITE_RAPIDAPI_KEY in .env');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Check your RapidAPI subscription.');
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Normalize property data from Realty-in-US API
+ * 
+ * Transforms raw API response into consistent format for use throughout app.
+ * Includes image quality upgrades, address normalization, and days on market
+ * calculation. All images are upgraded to higher quality versions.
+ * 
+ * @function
+ * @private
+ * @param {Object} property - Raw property object from API
+ * @returns {Object} Normalized property object
+ * @returns {string} returns.property_id - Unique property identifier
+ * @returns {string} returns.listing_id - Listing identifier
+ * @returns {string} returns.address - Street address
+ * @returns {string} returns.city - City name
+ * @returns {string} returns.state - State code
+ * @returns {string} returns.zip - ZIP code
+ * @returns {number|null} returns.lat - Latitude
+ * @returns {number|null} returns.lon - Longitude
+ * @returns {number|null} returns.price - List price
+ * @returns {number} returns.beds - Number of bedrooms
+ * @returns {number} returns.baths - Number of bathrooms
+ * @returns {number} returns.sqft - Square footage
+ * @returns {number|null} returns.lotSize - Lot size in square feet
+ * @returns {number|null} returns.yearBuilt - Year property was built
+ * @returns {string} returns.propertyType - Property type
+ * @returns {string} returns.status - Listing status
+ * @returns {string} returns.thumbnail - Thumbnail image URL (medium quality)
+ * @returns {string} returns.primaryPhoto - Primary photo URL (large quality)
+ * @returns {Array&lt;Object>} returns.photos - All photos array
+ * @returns {number|null} returns.daysOnMarket - Days property has been listed
+ * @returns {boolean} returns.isNewListing - True if flagged as new listing
+ */
+const normalizeProperty = (property) => {
+  const location = property.location || {};
+  const address = location.address || {};
+  const description = property.description || {};
+  
+  // Get primary photo and upgrade quality
+  const primaryPhotoUrl = property.primary_photo?.href;
+  const upgradedPrimaryPhoto = upgradeImageUrl(primaryPhotoUrl, 'large');
+  
+  // Get thumbnail (medium quality for grid view)
+  const thumbnailUrl = upgradeImageUrl(primaryPhotoUrl, 'medium') || 
+                       'https://placehold.co/640x480/e2e8f0/64748b?text=No+Image';
+  
+  // Process all photos if available
+  const photos = property.photos?.map(photo => ({
+    href: upgradeImageUrl(photo.href, 'xlarge'),
+    thumbnail: upgradeImageUrl(photo.href, 'medium')
+  })) || [];
+  
+  return {
+    // IDs
+    property_id: property.property_id,
+    listing_id: property.listing_id,
+    
+    // Location
+    address: address.line || '',
+    city: address.city || '',
+    state: address.state_code || '',
+    zip: address.postal_code || '',
+    
+    // Coordinates
+    lat: address.coordinate?.lat || null,
+    lon: address.coordinate?.lon || null,
+    
+    // Price
+    price: property.list_price || null,
+    
+    // Property Details
+    beds: description.beds || 0,
+    baths: description.baths || 0,
+    sqft: description.sqft || description.lot_sqft || 0,
+    lotSize: description.lot_sqft || null,
+    yearBuilt: description.year_built || null,
+    
+    // Property Type
+    propertyType: description.type || 'Unknown',
+    
+    // Status
+    status: property.status || 'for_sale',
+    
+    // Photos - UPGRADED QUALITY
+    thumbnail: thumbnailUrl,
+    primaryPhoto: upgradedPrimaryPhoto,
+    photos: photos,
+    
+    // Additional Info
+    daysOnMarket: property.list_date ? 
+      Math.floor((Date.now() - new Date(property.list_date).getTime()) / (1000 * 60 * 60 * 24)) : 
+      null,
+    
+    isNewListing: property.flags?.is_new_listing || false,
+    
+    // Raw data for debugging
+    _raw: property
+  };
+};
+
+/**
+ * Search properties for sale (backward compatibility wrapper)
+ * 
+ * Legacy function that wraps searchProperties for existing code.
+ * Converts old-style parameters to new format.
+ * 
+ * @async
+ * @function
+ * @param {string} cityOrPostalCode - City name or ZIP code
+ * @param {string|null} [stateCode=null] - State code (if city provided)
+ * @param {Object} [options={}] - Additional search options
+ * @returns {Promise&lt;Array&lt;Object>>} Array of property objects
+ * 
+ * @example
+ * const properties = await searchPropertiesForSale('Miami', 'FL', {
+ *   limit: 50,
+ *   price_min: 200000
+ * });
+ */
+export const searchPropertiesForSale = async (cityOrPostalCode, stateCode = null, options = {}) => {
+  const location = stateCode 
+    ? `${cityOrPostalCode}, ${stateCode}`
+    : cityOrPostalCode;
+    
+  return searchProperties({
+    location,
+    ...options
+  });
+};
+
+/**
+ * Get property details by property ID
+ * 
+ * Fetches complete details for a specific property using its unique ID.
+ * Returns normalized property object with upgraded images.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Unique property identifier
+ * @returns {Promise&lt;Object>} Normalized property details object
+ * @throws {Error} If API request fails
+ * 
+ * @example
+ * const property = await getPropertyDetails('M1234567890');
+ * console.log(property.address, property.price);
+ */
+export const getPropertyDetails = async (propertyId) => {
+  try {
+    console.log('🡠Getting property details:', propertyId);
+    
+    await waitForRateLimit();
+    
+    const response = await axios.get(`${BASE_URL}/properties/v3/detail`, {
+      params: {
+        property_id: propertyId
+      },
+      ...getConfig()
+    });
+    
+    console.log('✅ Property details:', response.data);
+    
+    const property = response.data?.data?.home || {};
+    return normalizeProperty(property);
+  } catch (error) {
+    console.error('❌ Property details error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Get property photos in high quality
+ * 
+ * Fetches all available photos for a property with upgraded quality.
+ * Returns array of photo objects with both full-size and thumbnail URLs.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Unique property identifier
+ * @returns {Promise&lt;Array&lt;Object>>} Array of photo objects
+ * @returns {string} returns[].href - Full-size photo URL (xlarge quality)
+ * @returns {string} returns[].thumbnail - Thumbnail URL (medium quality)
+ * @returns {Array&lt;string>} returns[].tags - Photo tags (e.g., 'kitchen', 'bedroom')
+ * 
+ * @example
+ * const photos = await getPropertyPhotos('M1234567890');
+ * photos.forEach(photo => {
+ *   console.log(photo.href); // High-res image URL
+ * });
+ */
+export const getPropertyPhotos = async (propertyId) => {
+  try {
+    console.log('📷 Getting property photos:', propertyId);
+    
+    await waitForRateLimit();
+    
+    const response = await axios.get(`${BASE_URL}/properties/v3/get-photos`, {
+      params: {
+        property_id: propertyId
+      },
+      ...getConfig()
+    });
+    
+    const photos = response.data?.data?.home_photos || [];
+    
+    // Upgrade all photo URLs to high quality
+    return photos.map(photo => ({
+      href: upgradeImageUrl(photo.href, 'xlarge'),
+      thumbnail: upgradeImageUrl(photo.href, 'medium'),
+      tags: photo.tags || []
+    }));
+  } catch (error) {
+    console.error('❌ Property photos error:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+/**
+ * Get similar properties
+ * 
+ * Finds properties similar to the specified property based on location,
+ * price, size, and other characteristics. Useful for "You may also like"
+ * sections and comparison shopping.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Reference property ID
+ * @returns {Promise&lt;Array&lt;Object>>} Array of similar property objects
+ * 
+ * @example
+ * const similar = await getSimilarProperties('M1234567890');
+ * console.log(`Found ${similar.length} similar properties`);
+ */
+export const getSimilarProperties = async (propertyId) => {
+  try {
+    console.log('🔄 Getting similar properties:', propertyId);
+    
+    await waitForRateLimit();
+    
+    const response = await axios.get(`${BASE_URL}/properties/v3/get-similar-listings`, {
+      params: {
+        property_id: propertyId
+      },
+      ...getConfig()
+    });
+    
+    const properties = response.data?.data?.home_search?.results || [];
+    return properties.map(prop => normalizeProperty(prop));
+  } catch (error) {
+    console.error('❌ Similar properties error:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+/**
+ * Get market statistics for a location
+ * 
+ * Retrieves market-level statistics for a city including average prices,
+ * inventory levels, and market trends. Useful for market analysis and
+ * comparison.
+ * 
+ * @async
+ * @function
+ * @param {string} city - City name
+ * @param {string} stateCode - State code (e.g., 'FL', 'CA')
+ * @returns {Promise&lt;Object|null>} Market statistics object or null if unavailable
+ * 
+ * @example
+ * const stats = await getMarketStatistics('Miami', 'FL');
+ * console.log('Median price:', stats.medianPrice);
+ */
+export const getMarketStatistics = async (city, stateCode) => {
+  try {
+    console.log('📊 Getting market stats:', { city, stateCode });
+    
+    await waitForRateLimit();
+    
+    const response = await axios.get(`${BASE_URL}/market-statistics/v1/data`, {
+      params: {
+        city,
+        state_code: stateCode
+      },
+      ...getConfig()
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Market statistics error:', error.response?.data || error.message);
+    return null;
+  }
+};
+
+/**
+ * Default module export with all API functions
+ * 
+ * @type {Object}
+ * @property {Function} autoCompleteLocations - Location autocomplete
+ * @property {Function} searchProperties - Main property search
+ * @property {Function} searchPropertiesForSale - Legacy search wrapper
+ * @property {Function} getPropertyDetails - Get single property details
+ * @property {Function} getPropertyPhotos - Get property photos
+ * @property {Function} getSimilarProperties - Find similar properties
+ * @property {Function} getMarketStatistics - Get market statistics
+ * @property {Function} upgradeImageUrl - Upgrade image quality
+ */
+export default {
+  autoCompleteLocations,
+  searchProperties,
+  searchPropertiesForSale,
+  getPropertyDetails,
+  getPropertyPhotos,
+  getSimilarProperties,
+  getMarketStatistics,
+  upgradeImageUrl
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

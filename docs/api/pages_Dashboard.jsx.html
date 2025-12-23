@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/Dashboard.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/Dashboard.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Heart, TrendingUp, DollarSign, Home, Loader2 } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { getSavedProperties } from '../services/database';  // ✅ Correct import
+
+/**
+ * Dashboard Page Component
+ * 
+ * Main dashboard showing user statistics and quick actions.
+ * Displays saved properties count, average cap rate, and total portfolio value.
+ * 
+ * @component
+ */
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const [savedCount, setSavedCount] = useState(0);
+  const [avgCapRate, setAvgCapRate] = useState(0);
+  const [totalValue, setTotalValue] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/signin');
+    }
+  }, [currentUser, navigate]);
+
+  // Load user statistics
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!currentUser?.uid) return;
+
+      try {
+        setLoading(true);
+        const properties = await getSavedProperties(currentUser.uid);  // ✅ FIXED: Changed from getUserSavedProperties
+        setSavedCount(properties.length);
+
+        // Calculate average cap rate
+        const validCapRates = properties
+          .map(p => p.estimatedCapRate || p.scoreData?.capRate || p.propertyData?.metrics?.capRate)
+          .filter(rate => rate &amp;&amp; rate > 0);
+
+        const avgCap = validCapRates.length > 0
+          ? validCapRates.reduce((sum, rate) => sum + rate, 0) / validCapRates.length
+          : 0;
+
+        setAvgCapRate(avgCap);
+
+        // Calculate total value
+        const total = properties.reduce((sum, p) => {
+          const price = p.propertyData?.price || 0;
+          return sum + price;
+        }, 0);
+
+        setTotalValue(total);
+      } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [currentUser]);
+
+  // Format currency
+  const formatPrice = (value) => {
+    if (!value) return '$0';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Format percentage
+  const formatPercent = (value) => {
+    if (!value || isNaN(value)) return '0.0%';
+    return `${value.toFixed(1)}%`;
+  };
+
+  if (!currentUser) {
+    return null;
+  }
+
+  return (
+    &lt;div className="min-h-screen bg-gray-50 py-8">
+      &lt;div className="container mx-auto px-4">
+        {/* Header */}
+        &lt;div className="mb-8">
+          &lt;h1 className="text-3xl font-bold text-gray-900">Dashboard&lt;/h1>
+          &lt;p className="text-gray-600">
+            Welcome back, {currentUser.displayName || currentUser.email?.split('@')[0]}
+          &lt;/p>
+        &lt;/div>
+
+        {loading ? (
+          &lt;div className="flex items-center justify-center py-20">
+            &lt;Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          &lt;/div>
+        ) : (
+          &lt;>
+            {/* Stats Grid */}
+            &lt;div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {/* Saved Properties Card */}
+              &lt;div
+                onClick={() => navigate('/my-properties')}
+                className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow"
+              >
+                &lt;div className="flex items-center justify-between mb-2">
+                  &lt;Heart className="w-8 h-8 text-red-500" />
+                &lt;/div>
+                &lt;div className="text-3xl font-bold text-gray-900 mb-1">
+                  {savedCount}
+                &lt;/div>
+                &lt;div className="text-sm text-gray-600">Saved Properties&lt;/div>
+              &lt;/div>
+
+              {/* Average Cap Rate Card */}
+              &lt;div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                &lt;div className="flex items-center justify-between mb-2">
+                  &lt;TrendingUp className="w-8 h-8 text-green-500" />
+                &lt;/div>
+                &lt;div className="text-3xl font-bold text-gray-900 mb-1">
+                  {formatPercent(avgCapRate)}
+                &lt;/div>
+                &lt;div className="text-sm text-gray-600">Avg. Cap Rate&lt;/div>
+              &lt;/div>
+
+              {/* Total Value Card */}
+              &lt;div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                &lt;div className="flex items-center justify-between mb-2">
+                  &lt;DollarSign className="w-8 h-8 text-blue-500" />
+                &lt;/div>
+                &lt;div className="text-3xl font-bold text-gray-900 mb-1">
+                  {formatPrice(totalValue)}
+                &lt;/div>
+                &lt;div className="text-sm text-gray-600">Total Value&lt;/div>
+              &lt;/div>
+            &lt;/div>
+
+            {/* Empty State or Quick Actions */}
+            {savedCount === 0 ? (
+              &lt;div className="bg-white rounded-xl p-12 text-center shadow-sm border border-gray-200">
+                &lt;Home className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                &lt;h2 className="text-2xl font-bold text-gray-900 mb-2">
+                  Your dashboard is ready
+                &lt;/h2>
+                &lt;p className="text-gray-600 mb-6">
+                  Start saving properties to see analytics and insights here
+                &lt;/p>
+                &lt;button
+                  onClick={() => navigate('/properties')}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  Browse Properties
+                &lt;/button>
+              &lt;/div>
+            ) : (
+              &lt;div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                &lt;h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions&lt;/h2>
+                &lt;div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  &lt;button
+                    onClick={() => navigate('/my-properties')}
+                    className="text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    &lt;div className="font-semibold text-gray-900 mb-1">
+                      View Saved Properties
+                    &lt;/div>
+                    &lt;div className="text-sm text-gray-600">
+                      Manage your {savedCount} saved properties
+                    &lt;/div>
+                  &lt;/button>
+
+                  &lt;button
+                    onClick={() => navigate('/properties')}
+                    className="text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    &lt;div className="font-semibold text-gray-900 mb-1">
+                      Search Properties
+                    &lt;/div>
+                    &lt;div className="text-sm text-gray-600">
+                      Find new investment opportunities
+                    &lt;/div>
+                  &lt;/button>
+
+                  &lt;div className='md:col-span-2 flex justify-center'>
+                  &lt;button
+                    onClick={() => navigate('/investor-profile')}
+                    className="mx-auto block text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    &lt;div className="font-semibold text-gray-900 mb-1">
+                      Investor Profile
+                    &lt;/div>
+                    &lt;div className="text-sm text-gray-600">
+                      Update your investment preferences
+                    &lt;/div>
+                  &lt;/button>
+                  &lt;/div>
+                &lt;/div>
+              &lt;/div>
+            )}
+          &lt;/>
+        )}
+      &lt;/div>
+    &lt;/div>
+  );
+};
+
+export default Dashboard;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

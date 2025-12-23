@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/Profile.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/Profile.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Calendar, Check, AlertCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { updateProfile } from 'firebase/auth';
+
+/**
+ * Profile Page Component
+ * 
+ * Allows users to view and update their profile information.
+ * 
+ * @component
+ */
+const Profile = () => {
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  
+  const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
+  const [updating, setUpdating] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+
+  // Redirect if not authenticated
+  if (!currentUser) {
+    navigate('/signin');
+    return null;
+  }
+
+  // Format join date
+  const joinDate = currentUser.metadata?.creationTime 
+    ? new Date(currentUser.metadata.creationTime).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    : 'Unknown';
+
+  // Handle profile update
+  const handleUpdateProfile = async () => {
+    if (!displayName.trim()) {
+      setMessage({ type: 'error', text: 'Display name cannot be empty' });
+      return;
+    }
+
+    setUpdating(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await updateProfile(currentUser, {
+        displayName: displayName.trim()
+      });
+
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setMessage({ type: '', text: '' });
+      }, 3000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    &lt;div className="min-h-screen bg-gray-50">
+      &lt;div className="container mx-auto px-4 py-8">
+        &lt;div className="max-w-2xl mx-auto">
+          &lt;div className="mb-8">
+            &lt;h1 className="text-4xl font-bold text-gray-900 mb-2">Profile&lt;/h1>
+            &lt;p className="text-gray-600">Manage your account information&lt;/p>
+          &lt;/div>
+
+          &lt;div className="bg-white rounded-xl border border-gray-200 p-8">
+            {/* Profile Header */}
+            &lt;div className="flex items-center gap-4 mb-8">
+              &lt;div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
+                &lt;User className="w-10 h-10 text-blue-600" />
+              &lt;/div>
+              &lt;div>
+                &lt;h2 className="text-2xl font-bold text-gray-900">
+                  {currentUser.displayName || 'User'}
+                &lt;/h2>
+                &lt;p className="text-gray-600">{currentUser.email}&lt;/p>
+              &lt;/div>
+            &lt;/div>
+
+            {/* Message Display */}
+            {message.text &amp;&amp; (
+              &lt;div
+                className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
+                  message.type === 'success'
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {message.type === 'success' ? (
+                  &lt;Check className="w-5 h-5" />
+                ) : (
+                  &lt;AlertCircle className="w-5 h-5" />
+                )}
+                &lt;span>{message.text}&lt;/span>
+              &lt;/div>
+            )}
+
+            {/* Form */}
+            &lt;div className="space-y-6">
+              &lt;div>
+                &lt;label className="block text-sm font-medium text-gray-700 mb-2">
+                  Display Name
+                &lt;/label>
+                &lt;input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your name"
+                />
+              &lt;/div>
+
+              &lt;div>
+                &lt;label className="block text-sm font-medium text-gray-700 mb-2">
+                  &lt;Mail className="w-4 h-4 inline mr-2" />
+                  Email
+                &lt;/label>
+                &lt;input
+                  type="email"
+                  value={currentUser.email}
+                  disabled
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                />
+                &lt;p className="text-xs text-gray-500 mt-1">Email cannot be changed&lt;/p>
+              &lt;/div>
+
+              &lt;div>
+                &lt;label className="block text-sm font-medium text-gray-700 mb-2">
+                  &lt;Calendar className="w-4 h-4 inline mr-2" />
+                  Member Since
+                &lt;/label>
+                &lt;input
+                  type="text"
+                  value={joinDate}
+                  disabled
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                />
+              &lt;/div>
+
+              &lt;button
+                onClick={handleUpdateProfile}
+                disabled={updating || displayName === currentUser.displayName}
+                className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                  updating || displayName === currentUser.displayName
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {updating ? 'Updating...' : 'Update Profile'}
+              &lt;/button>
+            &lt;/div>
+          &lt;/div>
+        &lt;/div>
+      &lt;/div>
+    &lt;/div>
+  );
+};
+
+export default Profile;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

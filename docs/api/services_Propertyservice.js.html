@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: services/Propertyservice.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: services/Propertyservice.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Property Service
+ * 
+ * Fetches property data from RentCast API and calculates investment scores
+ * using user's personal thresholds from InvestorProfile
+ */
+
+import { getInvestmentThresholds, getFinancingDefaults } from './Investorservice';
+
+const RENTCAST_API_KEY = import.meta.env.VITE_RENTCAST_API_KEY;
+const BASE_URL = 'https://api.rentcast.io/v1';
+
+// Rate limiting &amp; caching
+const MIN_REQUEST_INTERVAL = 1000;
+let lastRequestTime = 0;
+const propertyCache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// ==================== RATE LIMITING ====================
+const waitForRateLimit = async () => {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest &lt; MIN_REQUEST_INTERVAL) {
+    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+};
+
+// ==================== CACHE MANAGEMENT ====================
+const getCacheKey = (address, city, state, zip) => {
+  return `${address}_${city}_${state}_${zip}`.toLowerCase().replace(/\s+/g, '_');
+};
+
+const getFromCache = (key) => {
+  const cached = propertyCache.get(key);
+  if (cached &amp;&amp; (Date.now() - cached.timestamp &lt; CACHE_DURATION)) {
+    console.log(`✅ Cache hit: ${key}`);
+    return cached.data;
+  }
+  if (cached) propertyCache.delete(key);
+  return null;
+};
+
+const saveToCache = (key, data) => {
+  propertyCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+};
+
+// ==================== BADGE CONFIGURATION ====================
+export const BADGE_CONFIG = {
+  'excellent': {
+    label: 'Excellent Deal',
+    icon: '🟢',
+    color: 'bg-green-500',
+    textColor: 'text-white',
+    borderColor: '#22c55e',
+    description: 'Exceeds all your investment targets'
+  },
+  'good': {
+    label: 'Good Deal',
+    icon: '🟢',
+    color: 'bg-green-400',
+    textColor: 'text-white',
+    borderColor: '#4ade80',
+    description: 'Meets most of your investment targets'
+  },
+  'fair': {
+    label: 'Fair Deal',
+    icon: '🟡',
+    color: 'bg-yellow-400',
+    textColor: 'text-gray-800',
+    borderColor: '#facc15',
+    description: 'Meets some of your investment targets'
+  },
+  'risky': {
+    label: 'Risky',
+    icon: '🔴',
+    color: 'bg-red-500',
+    textColor: 'text-white',
+    borderColor: '#ef4444',
+    description: 'Below your investment targets'
+  },
+  'avoid': {
+    label: 'Avoid',
+    icon: '🔴',
+    color: 'bg-red-700',
+    textColor: 'text-white',
+    borderColor: '#b91c1c',
+    description: 'Does not meet your investment criteria'
+  },
+  'insufficient-data': {
+    label: 'Analyzing...',
+    icon: '⏳',
+    color: 'bg-gray-400',
+    textColor: 'text-white',
+    borderColor: '#9ca3af',
+    description: 'Insufficient data for analysis'
+  }
+};
+
+// ==================== RENTCAST API FUNCTIONS ====================
+
+/**
+ * Get rent estimate from RentCast
+ */
+const getRentEstimate = async ({ address, city, state, zipCode, bedrooms, bathrooms, squareFootage, propertyType }) => {
+  try {
+    if (!RENTCAST_API_KEY) {
+      console.warn('⚠️ RentCast API key not configured');
+      return null;
+    }
+
+    const params = new URLSearchParams({ address, city, state, zipCode });
+    if (bedrooms) params.append('bedrooms', bedrooms);
+    if (bathrooms) params.append('bathrooms', bathrooms);
+    if (squareFootage) params.append('squareFootage', squareFootage);
+    if (propertyType) params.append('propertyType', propertyType);
+
+    console.log('🏠 RentCast Rent API:', `${BASE_URL}/avm/rent/long-term?${params}`);
+
+    const response = await fetch(`${BASE_URL}/avm/rent/long-term?${params}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-Api-Key': RENTCAST_API_KEY
+      }
+    });
+
+    if (!response.ok) {
+      console.error('❌ RentCast Rent Error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('✅ RentCast Rent Response:', data);
+
+    return {
+      rentEstimate: data.rent || null,
+      rentRangeLow: data.rentRangeLow || null,
+      rentRangeHigh: data.rentRangeHigh || null,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      comparables: data.comparables || []
+    };
+  } catch (error) {
+    console.error('❌ RentCast Rent Error:', error);
+    return null;
+  }
+};
+
+/**
+ * Get property details from RentCast (includes tax info)
+ */
+const getPropertyDetails = async ({ address, city, state, zipCode }) => {
+  try {
+    if (!RENTCAST_API_KEY) {
+      console.warn('⚠️ RentCast API key not configured');
+      return null;
+    }
+
+    const params = new URLSearchParams({ address, city, state, zipCode });
+    
+    console.log('🏠 RentCast Property API:', `${BASE_URL}/properties?${params}`);
+
+    const response = await fetch(`${BASE_URL}/properties?${params}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-Api-Key': RENTCAST_API_KEY
+      }
+    });
+
+    if (!response.ok) {
+      console.error('❌ RentCast Property Error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('✅ RentCast Property Response:', data);
+
+    const property = Array.isArray(data) ? data[0] : data;
+    if (!property) return null;
+
+    return {
+      propertyId: property.id,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      squareFootage: property.squareFootage,
+      lotSize: property.lotSize,
+      yearBuilt: property.yearBuilt,
+      propertyType: property.propertyType,
+      assessedValue: property.assessedValue,
+      taxAmount: property.taxAmount,
+      priceEstimate: property.price,
+      priceRangeLow: property.priceRangeLow,
+      priceRangeHigh: property.priceRangeHigh,
+      lastSaleDate: property.lastSaleDate,
+      lastSalePrice: property.lastSalePrice
+    };
+  } catch (error) {
+    console.error('❌ RentCast Property Error:', error);
+    return null;
+  }
+};
+
+/**
+ * Map property types to RentCast format
+ */
+const mapPropertyType = (type) => {
+  if (!type) return undefined;
+  const typeMap = {
+    'single_family': 'Single Family',
+    'condo': 'Condo',
+    'townhouse': 'Townhouse',
+    'multi_family': 'Multi Family',
+    'apartment': 'Apartment',
+    'duplex': 'Duplex',
+    'triplex': 'Triplex',
+    'quadruplex': 'Quadruplex'
+  };
+  return typeMap[type.toLowerCase()] || type;
+};
+
+// ==================== MORTGAGE CALCULATION ====================
+const calculateMonthlyMortgage = (principal, annualRate, years) => {
+  if (!principal || !annualRate || !years) return 0;
+  const monthlyRate = annualRate / 100 / 12;
+  const numPayments = years * 12;
+  return (principal * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
+         (Math.pow(1 + monthlyRate, numPayments) - 1);
+};
+
+// ==================== INVESTMENT SCORE CALCULATION ====================
+/**
+ * Calculate investment score using USER'S PERSONAL THRESHOLDS
+ */
+const calculateInvestmentScore = (data) => {
+  const { price, rentEstimate, propertyTax, insurance } = data;
+  
+  if (!price || !rentEstimate) {
+    return {
+      investmentScore: 0,
+      investmentBadge: 'insufficient-data',
+      badgeDescription: 'Insufficient data for analysis',
+      metrics: null
+    };
+  }
+
+  // Get user's thresholds and financing defaults
+  const thresholds = getInvestmentThresholds();
+  const financing = getFinancingDefaults();
+  
+  // Calculate financing
+  const downPayment = price * (financing.downPaymentPercent / 100);
+  const loanAmount = price - downPayment;
+  const monthlyMortgage = calculateMonthlyMortgage(loanAmount, financing.interestRate, financing.loanTermYears);
+  const closingCosts = price * 0.03;
+  const totalInvestment = downPayment + closingCosts;
+  
+  // Calculate monthly income
+  const monthlyRent = rentEstimate;
+  const annualRent = monthlyRent * 12;
+  
+  // Calculate monthly expenses
+  const monthlyPropertyTax = (propertyTax || price * (financing.annualTaxRate / 100)) / 12;
+  const monthlyInsurance = (insurance || price * (financing.annualInsuranceRate / 100)) / 12;
+  const monthlyVacancy = monthlyRent * (financing.vacancyRate / 100);
+  const monthlyManagement = monthlyRent * (financing.managementRate / 100);
+  const monthlyMaintenance = monthlyRent * (financing.maintenanceRate / 100);
+  const monthlyCapEx = monthlyRent * (financing.capExRate / 100);
+  const monthlyHOA = data.hoa || 0;
+  
+  const totalMonthlyExpenses = monthlyMortgage + monthlyPropertyTax + monthlyInsurance + 
+                               monthlyVacancy + monthlyManagement + monthlyMaintenance + 
+                               monthlyCapEx + monthlyHOA;
+  
+  // Calculate key metrics
+  const monthlyCashFlow = monthlyRent - totalMonthlyExpenses;
+  const annualCashFlow = monthlyCashFlow * 12;
+  
+  // NOI (excludes mortgage)
+  const operatingExpenses = (monthlyPropertyTax + monthlyInsurance + monthlyVacancy + 
+                            monthlyManagement + monthlyMaintenance + monthlyCapEx + monthlyHOA) * 12;
+  const annualNOI = annualRent - operatingExpenses;
+  
+  // Key ratios
+  const capRate = (annualNOI / price) * 100;
+  const cashOnCashReturn = (annualCashFlow / totalInvestment) * 100;
+  const dscr = annualNOI / (monthlyMortgage * 12);
+  
+  // ==================== SCORING USING USER'S THRESHOLDS ====================
+  const { weights, tiers } = thresholds;
+  let score = 0;
+  
+  // Cash-on-Cash Return scoring
+  const cocTiers = tiers.cashOnCash;
+  if (cashOnCashReturn >= cocTiers.excellent) score += weights.cashOnCash;
+  else if (cashOnCashReturn >= cocTiers.good) score += weights.cashOnCash * 0.8;
+  else if (cashOnCashReturn >= cocTiers.fair) score += weights.cashOnCash * 0.6;
+  else if (cashOnCashReturn >= cocTiers.poor) score += weights.cashOnCash * 0.3;
+  else if (cashOnCashReturn >= cocTiers.minimum) score += weights.cashOnCash * 0.15;
+  
+  // Cap Rate scoring
+  const capTiers = tiers.capRate;
+  if (capRate >= capTiers.excellent) score += weights.capRate;
+  else if (capRate >= capTiers.good) score += weights.capRate * 0.8;
+  else if (capRate >= capTiers.fair) score += weights.capRate * 0.6;
+  else if (capRate >= capTiers.poor) score += weights.capRate * 0.3;
+  else if (capRate >= capTiers.minimum) score += weights.capRate * 0.15;
+  
+  // DSCR scoring
+  const dscrTiers = tiers.dscr;
+  if (dscr >= dscrTiers.excellent) score += weights.dscr;
+  else if (dscr >= dscrTiers.good) score += weights.dscr * 0.8;
+  else if (dscr >= dscrTiers.fair) score += weights.dscr * 0.6;
+  else if (dscr >= dscrTiers.poor) score += weights.dscr * 0.3;
+  else if (dscr >= dscrTiers.minimum) score += weights.dscr * 0.15;
+  
+  // Cash Flow scoring
+  const cfTiers = tiers.cashFlow;
+  if (monthlyCashFlow >= cfTiers.excellent) score += weights.cashFlow;
+  else if (monthlyCashFlow >= cfTiers.good) score += weights.cashFlow * 0.8;
+  else if (monthlyCashFlow >= cfTiers.fair) score += weights.cashFlow * 0.6;
+  else if (monthlyCashFlow >= cfTiers.poor) score += weights.cashFlow * 0.3;
+  else if (monthlyCashFlow >= cfTiers.minimum) score += weights.cashFlow * 0.15;
+  
+  // Round score
+  const finalScore = Math.round(score);
+  
+  // Determine badge based on score and user's targets
+  let badge, badgeDescription;
+  
+  // Also check if it meets user's specific targets
+  const meetsCapRate = capRate >= thresholds.targetCapRate;
+  const meetsCashOnCash = cashOnCashReturn >= thresholds.targetCashOnCash;
+  const meetsCashFlow = monthlyCashFlow >= thresholds.targetMonthlyCashFlow;
+  const meetsDSCR = dscr >= thresholds.targetDSCR;
+  const targetsMetCount = [meetsCapRate, meetsCashOnCash, meetsCashFlow, meetsDSCR].filter(Boolean).length;
+  
+  if (finalScore >= 85 || targetsMetCount === 4) {
+    badge = 'excellent';
+    badgeDescription = 'Exceeds all your investment targets';
+  } else if (finalScore >= 70 || targetsMetCount >= 3) {
+    badge = 'good';
+    badgeDescription = 'Meets most of your investment targets';
+  } else if (finalScore >= 50 || targetsMetCount >= 2) {
+    badge = 'fair';
+    badgeDescription = 'Meets some of your investment targets';
+  } else if (finalScore >= 30 || targetsMetCount >= 1) {
+    badge = 'risky';
+    badgeDescription = 'Below your investment targets';
+  } else {
+    badge = 'avoid';
+    badgeDescription = 'Does not meet your investment criteria';
+  }
+  
+  return {
+    investmentScore: finalScore,
+    investmentBadge: badge,
+    badgeDescription,
+    cashFlow: Math.round(monthlyCashFlow),
+    roi: Math.round(cashOnCashReturn * 10) / 10,
+    
+    // Comparison with user's targets
+    targetComparison: {
+      capRate: { value: capRate, target: thresholds.targetCapRate, meets: meetsCapRate },
+      cashOnCash: { value: cashOnCashReturn, target: thresholds.targetCashOnCash, meets: meetsCashOnCash },
+      cashFlow: { value: monthlyCashFlow, target: thresholds.targetMonthlyCashFlow, meets: meetsCashFlow },
+      dscr: { value: dscr, target: thresholds.targetDSCR, meets: meetsDSCR }
+    },
+    
+    metrics: {
+      // Income
+      monthlyRent,
+      annualRent,
+      
+      // Key ratios
+      cashOnCashReturn: Math.round(cashOnCashReturn * 10) / 10,
+      capRate: Math.round(capRate * 10) / 10,
+      dscr: Math.round(dscr * 100) / 100,
+      
+      // Cash flow
+      monthlyCashFlow: Math.round(monthlyCashFlow),
+      annualCashFlow: Math.round(annualCashFlow),
+      
+      // NOI
+      monthlyNOI: Math.round(annualNOI / 12),
+      annualNOI: Math.round(annualNOI),
+      
+      // Investment
+      totalInvestment: Math.round(totalInvestment),
+      downPayment: Math.round(downPayment),
+      closingCosts: Math.round(closingCosts),
+      
+      // Expenses
+      monthlyExpenses: Math.round(totalMonthlyExpenses),
+      annualExpenses: Math.round(totalMonthlyExpenses * 12),
+      expenseBreakdown: {
+        mortgage: Math.round(monthlyMortgage),
+        propertyTax: Math.round(monthlyPropertyTax),
+        insurance: Math.round(monthlyInsurance),
+        maintenance: Math.round(monthlyMaintenance),
+        vacancy: Math.round(monthlyVacancy),
+        management: Math.round(monthlyManagement),
+        capEx: Math.round(monthlyCapEx),
+        hoa: Math.round(monthlyHOA)
+      }
+    }
+  };
+};
+
+// ==================== MAIN EXPORT: GET PROPERTY DATA ON HOVER ====================
+/**
+ * Get enriched property data when user hovers/clicks on property card
+ * @param {Object} property - Property from Realty API
+ * @returns {Object} Enriched data with rent estimate and investment analysis
+ */
+export const getPropertyDataOnHover = async (property) => {
+  try {
+    const { address, city, state, zip, price, beds, baths, sqft } = property;
+    
+    // Check cache first
+    const cacheKey = getCacheKey(address, city, state, zip);
+    const cached = getFromCache(cacheKey);
+    if (cached) return cached;
+    
+    console.log(`🔍 [HOVER] Fetching RentCast data for: ${address}`);
+    
+    await waitForRateLimit();
+    
+    // Fetch rent estimate
+    const rentData = await getRentEstimate({
+      address,
+      city,
+      state,
+      zipCode: zip,
+      bedrooms: beds,
+      bathrooms: baths,
+      squareFootage: sqft,
+      propertyType: mapPropertyType(property.propertyType)
+    });
+    
+    // Fetch property details (tax info)
+    let propertyDetails = null;
+    if (RENTCAST_API_KEY) {
+      await waitForRateLimit();
+      propertyDetails = await getPropertyDetails({ address, city, state, zipCode: zip });
+    }
+    
+    // Build enriched data
+    const enrichedData = {
+      // Original property data
+      ...property,
+      
+      // RentCast rent data
+      rentEstimate: rentData?.rentEstimate || null,
+      rentRangeLow: rentData?.rentRangeLow || null,
+      rentRangeHigh: rentData?.rentRangeHigh || null,
+      rentConfidence: rentData?.rentEstimate ? 'high' : 'low',
+      rentSource: rentData?.rentEstimate ? 'RentCast' : 'none',
+      rentalComparables: rentData?.comparables || [],
+      
+      // RentCast property data
+      propertyTax: propertyDetails?.taxAmount || null,
+      assessedValue: propertyDetails?.assessedValue || null,
+      priceEstimate: propertyDetails?.priceEstimate || null,
+      yearBuilt: propertyDetails?.yearBuilt || property.yearBuilt || null,
+      lastSaleDate: propertyDetails?.lastSaleDate || null,
+      lastSalePrice: propertyDetails?.lastSalePrice || null,
+      
+      // Photos (from Realty API)
+      photos: property.photos || [property.thumbnail],
+      
+      // Metadata
+      hasRentCastData: !!rentData?.rentEstimate,
+      dataSource: 'RentCast'
+    };
+    
+    // Calculate investment score
+    if (enrichedData.rentEstimate &amp;&amp; price) {
+      const analysis = calculateInvestmentScore({
+        price,
+        rentEstimate: enrichedData.rentEstimate,
+        propertyTax: enrichedData.propertyTax,
+        insurance: null,
+        hoa: 0
+      });
+      Object.assign(enrichedData, analysis);
+    } else {
+      enrichedData.investmentScore = 0;
+      enrichedData.investmentBadge = 'insufficient-data';
+      enrichedData.badgeDescription = 'Rent data not available';
+      enrichedData.metrics = null;
+    }
+    
+    // Cache the result
+    saveToCache(cacheKey, enrichedData);
+    
+    console.log(`✅ [HOVER] Analysis complete:`, {
+      rent: enrichedData.rentEstimate,
+      score: enrichedData.investmentScore,
+      badge: enrichedData.investmentBadge,
+      cashFlow: enrichedData.cashFlow
+    });
+    
+    return enrichedData;
+    
+  } catch (error) {
+    console.error('❌ Property data fetch error:', error);
+    return {
+      ...property,
+      rentEstimate: null,
+      hasRentCastData: false,
+      investmentScore: 0,
+      investmentBadge: 'insufficient-data',
+      badgeDescription: 'Error fetching data',
+      metrics: null
+    };
+  }
+};
+
+/**
+ * Clear the property cache
+ */
+export const clearCache = () => {
+  propertyCache.clear();
+  console.log('🗑️ Property cache cleared');
+};
+
+/**
+ * Get cache statistics
+ */
+export const getCacheStats = () => ({
+  size: propertyCache.size,
+  keys: Array.from(propertyCache.keys())
+});
+
+// ==================== EXPORTS ====================
+export default {
+  getPropertyDataOnHover,
+  clearCache,
+  getCacheStats,
+  BADGE_CONFIG
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

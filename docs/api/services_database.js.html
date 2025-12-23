@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: services/database.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: services/database.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file Firebase Firestore database service
+ * @module services/database
+ * @description Complete database service for managing saved properties in Firestore.
+ * Provides CRUD operations for user's saved property portfolio including saving,
+ * retrieving, updating, and deleting properties. Handles property data, rent
+ * estimates, analysis results, user notes, and tags.
+ * 
+ * Document ID Pattern: {userId}_{propertyId}
+ * Collection: savedProperties
+ * 
+ * Used by: PropertyCard, ExpandedPropertyView, PropertyAnalysisPage, MyProperties,
+ * useSavedProperties hook, and PropertyDetails components.
+ * 
+ * @requires firebase/firestore
+ * @see {@link https://firebase.google.com/docs/firestore Firestore Documentation}
+ * 
+ * @version 1.0.0
+ */
+
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  deleteDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  orderBy,
+  serverTimestamp 
+} from 'firebase/firestore';
+
+// Adjust this import path to match your project structure
+import { db } from '../config/firebase';
+
+const COLLECTION_NAME = 'savedProperties';
+
+/**
+ * Save a property to user's favorites
+ * 
+ * Creates or updates a saved property document in Firestore. Extracts and
+ * normalizes property data from various possible formats (Realty API, enriched
+ * data, RentCast data). Handles thumbnail extraction, rent estimates, multi-family
+ * detection, and investment metrics.
+ * 
+ * Document structure includes: property data, thumbnails, photos, rent estimates,
+ * RentCast data, tax info, multi-family info, investment metrics, user notes/tags,
+ * and timestamps.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID (required)
+ * @param {Object} propertyData - Property data object (required)
+ * @param {string} propertyData.property_id - Unique property ID (required)
+ * @param {Object} [propertyData.location] - Location object with address
+ * @param {Object} [zillowData={}] - Enrichment data (RentCast, Zillow, etc.)
+ * @param {Object} [quickMetrics={}] - Investment metrics (score, cashflow, etc.)
+ * @returns {Promise&lt;string>} Document ID ({userId}_{propertyId})
+ * @throws {Error} If userId is invalid or missing
+ * @throws {Error} If property_id is missing
+ * @throws {Error} If Firestore operation fails
+ * 
+ * @example
+ * await saveProperty(user.uid, property, rentCastData, metrics);
+ * // Saves to: savedProperties/{userId}_{propertyId}
+ * 
+ * @example
+ * // With full data
+ * await saveProperty(
+ *   'user123',
+ *   { property_id: 'M987654321', price: 250000, ... },
+ *   { rentEstimate: 2000, unitCount: 2, ... },
+ *   { score: 75, monthlyCashFlow: 450, capRate: 7.2 }
+ * );
+ */
+export const saveProperty = async (userId, propertyData, zillowData = {}, quickMetrics = {}) => {
+  try {
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('Valid User ID is required');
+    }
+    if (!propertyData?.property_id) {
+      throw new Error('Property ID is required');
+    }
+
+    console.log('🔵 saveProperty called');
+    console.log('  userId:', userId);
+    console.log('  propertyId:', propertyData.property_id);
+
+    const docId = `${userId}_${propertyData.property_id}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+
+    const extractAddress = () => {
+      if (propertyData.location?.address?.line) return propertyData.location.address.line;
+      return propertyData.address || '';
+    };
+
+    const extractCity = () => {
+      if (propertyData.location?.address?.city) return propertyData.location.address.city;
+      return propertyData.city || '';
+    };
+
+    const extractState = () => {
+      if (propertyData.location?.address?.state_code) return propertyData.location.address.state_code;
+      return propertyData.state || '';
+    };
+
+    const extractZip = () => {
+      if (propertyData.location?.address?.postal_code) return propertyData.location.address.postal_code;
+      return propertyData.zipCode || propertyData.zip || '';
+    };
+
+    const extractPrice = () => propertyData.list_price || propertyData.price || 0;
+    const extractBeds = () => propertyData.description?.beds || propertyData.beds || 0;
+    const extractBaths = () => propertyData.description?.baths || propertyData.baths || 0;
+    const extractSqft = () => propertyData.description?.sqft || propertyData.sqft || 0;
+
+    const extractRentEstimate = () => {
+      return zillowData?.rentEstimate || 
+             zillowData?.rent || 
+             propertyData.rentEstimate ||
+             propertyData.totalMonthlyRent ||
+             propertyData.rentCastData?.rentEstimate ||
+             propertyData.enrichedData?.rentEstimate ||
+             null;
+    };
+
+    // Extract thumbnail from multiple possible sources
+    const extractThumbnail = () => {
+      return propertyData.thumbnail ||
+             propertyData.primary_photo?.href ||
+             propertyData.primaryPhoto ||
+             propertyData.photos?.[0]?.href ||
+             propertyData.photos?.[0] ||
+             zillowData?.photos?.[0]?.href ||
+             zillowData?.photos?.[0] ||
+             zillowData?.thumbnail ||
+             '';
+    };
+
+    // Extract photos array
+    const extractPhotos = () => {
+      if (propertyData.photos?.length > 0) {
+        return propertyData.photos;
+      }
+      if (zillowData?.photos?.length > 0) {
+        return zillowData.photos;
+      }
+      return [];
+    };
+
+    const savedPropertyData = {
+      userId,
+      propertyId: propertyData.property_id,
+      
+      propertyData: {
+        address: extractAddress(),
+        city: extractCity(),
+        state: extractState(),
+        zipCode: extractZip(),
+        price: extractPrice(),
+        beds: extractBeds(),
+        baths: extractBaths(),
+        sqft: extractSqft(),
+      },
+
+      // THUMBNAIL - critical for My Properties page display
+      thumbnail: extractThumbnail(),
+      
+      // Photos array
+      photos: extractPhotos(),
+
+      // Rent data
+      rentEstimate: extractRentEstimate(),
+      rentRangeLow: zillowData?.rentRangeLow || propertyData.rentRangeLow || null,
+      rentRangeHigh: zillowData?.rentRangeHigh || propertyData.rentRangeHigh || null,
+      
+      // RentCast data (if available)
+      rentCastData: propertyData.rentCastData || zillowData?.rentCastData || null,
+      
+      // Tax data
+      annualTaxAmount: zillowData?.annualTaxAmount || zillowData?.taxData?.annualAmount || propertyData.annualTaxAmount || null,
+      
+      // Multi-family info
+      unitCount: propertyData.unitCount || propertyData.detectedUnits || propertyData.units || 1,
+      isMultiFamily: propertyData.isMultiFamily || (propertyData.unitCount > 1) || (propertyData.detectedUnits > 1) || false,
+
+      // Investment metrics
+      quickScore: quickMetrics?.score || quickMetrics?.investmentScore || propertyData.metrics?.score || null,
+      estimatedCashFlow: quickMetrics?.monthlyCashFlow || propertyData.metrics?.monthlyCashFlow || null,
+      estimatedCapRate: quickMetrics?.capRate || propertyData.metrics?.capRate || null,
+      investmentBadge: zillowData?.investmentBadge || quickMetrics?.badge || propertyData.badge || null,
+
+      // User data
+      notes: '',
+      tags: [],
+      
+      // Timestamps
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(docRef, savedPropertyData);
+    console.log('✅ Property saved:', docId);
+    console.log('  thumbnail:', savedPropertyData.thumbnail ? 'Yes' : 'No');
+    return docId;
+
+  } catch (error) {
+    console.error('❌ Save error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if property is saved by user
+ * 
+ * Checks if a property exists in user's saved collection. Used to show/hide
+ * save buttons and display saved state in UI.
+ * 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @returns {Promise&lt;boolean>} True if property is saved, false otherwise
+ * 
+ * @example
+ * const saved = await isPropertySaved(user.uid, 'M123456789');
+ * if (saved) {
+ *   showSavedIndicator();
+ * }
+ */
+export const isPropertySaved = async (userId, propertyId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return false;
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists();
+  } catch (error) {
+    if (error.code !== 'permission-denied') {
+      console.error('Error checking saved:', error);
+    }
+    return false;
+  }
+};
+
+/**
+ * Remove property from saved collection
+ * 
+ * Deletes a property from user's saved properties. Permanently removes
+ * the document from Firestore.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID to remove
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * @throws {Error} If Firestore delete fails
+ * 
+ * @example
+ * await unsaveProperty(user.uid, 'M123456789');
+ * console.log('Property removed from favorites');
+ */
+export const unsaveProperty = async (userId, propertyId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    await deleteDoc(docRef);
+    console.log('✅ Property removed:', docId);
+  } catch (error) {
+    console.error('❌ Unsave error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all saved properties for user
+ * 
+ * Retrieves user's complete saved property portfolio ordered by most recently
+ * updated. Returns array of property documents including all data fields.
+ * Used by My Properties page to display user's saved listings.
+ * 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise&lt;Array&lt;Object>>} Array of saved property objects
+ * @returns {string} returns[].id - Document ID
+ * @returns {string} returns[].propertyId - Property ID
+ * @returns {Object} returns[].propertyData - Property details
+ * @returns {string} returns[].thumbnail - Thumbnail URL
+ * @returns {number} returns[].rentEstimate - Rent estimate
+ * @returns {number} returns[].unitCount - Number of units
+ * @returns {number} returns[].quickScore - Investment score
+ * 
+ * @example
+ * const properties = await getSavedProperties(user.uid);
+ * console.log(`Found ${properties.length} saved properties`);
+ * properties.forEach(prop => {
+ *   console.log(prop.propertyData.address, prop.quickScore);
+ * });
+ */
+export const getSavedProperties = async (userId) => {
+  try {
+    if (!userId || typeof userId !== 'string') {
+      return [];
+    }
+    
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId),
+      orderBy('updatedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    const properties = [];
+    querySnapshot.forEach((doc) => {
+      properties.push({ id: doc.id, ...doc.data() });
+    });
+    console.log(`✅ Got ${properties.length} saved properties`);
+    return properties;
+  } catch (error) {
+    if (error.code === 'permission-denied') {
+      return [];
+    }
+    console.error('❌ Get saved error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get a single saved property
+ * 
+ * Retrieves one specific saved property by property ID. Used when loading
+ * property details or analysis page to restore saved data.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @returns {Promise&lt;Object|null>} Saved property object or null if not found
+ * @returns {string} returns.id - Document ID
+ * @returns {Object} returns.propertyData - Property details
+ * @returns {Object} returns.analysis - Saved analysis results
+ * @returns {string} returns.notes - User notes
+ * @returns {Array&lt;string>} returns.tags - User tags
+ * 
+ * @example
+ * const saved = await getSavedProperty(user.uid, 'M123456789');
+ * if (saved?.analysis) {
+ *   loadPreviousAnalysis(saved.analysis);
+ * }
+ */
+export const getSavedProperty = async (userId, propertyId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return null;
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return null;
+  } catch (error) {
+    if (error.code === 'permission-denied') {
+      return null;
+    }
+    console.error('❌ Get property error:', error);
+    return null;
+  }
+};
+
+/**
+ * Update a saved property (general purpose)
+ * 
+ * Generic update function for modifying any fields in a saved property.
+ * Automatically adds updatedAt timestamp. Use specific update functions
+ * (updatePropertyWithRentData, updatePropertyAnalysis, etc.) when available.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} updates - Object with fields to update
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * @throws {Error} If Firestore update fails
+ * 
+ * @example
+ * await updateSavedProperty(user.uid, 'M123456789', {
+ *   notes: 'Need to visit this one',
+ *   tags: ['favorite', 'duplex']
+ * });
+ */
+export const updateSavedProperty = async (userId, propertyId, updates) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    await updateDoc(docRef, { ...updates, updatedAt: serverTimestamp() });
+    console.log('✅ Property updated:', docId);
+  } catch (error) {
+    console.error('❌ Update error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property with rent data from RentCast
+ * 
+ * Specialized update for adding/updating RentCast rental data. Updates rent
+ * estimates, unit count, multi-family status, and rent data source. Called
+ * when RentCast data is fetched for a saved property.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} rentData - RentCast data object
+ * @param {number} [rentData.totalMonthlyRent] - Total monthly rent
+ * @param {number} [rentData.rentEstimate] - Per-unit rent estimate
+ * @param {number} [rentData.rentRangeLow] - Low end of range
+ * @param {number} [rentData.rentRangeHigh] - High end of range
+ * @param {number} [rentData.unitCount] - Number of units
+ * @param {boolean} [rentData.isMultiFamily] - Multi-family flag
+ * @returns {Promise&lt;boolean>} True if update succeeded
+ * 
+ * @example
+ * const rentData = await getRentEstimate(property);
+ * await updatePropertyWithRentData(user.uid, propertyId, rentData);
+ */
+export const updatePropertyWithRentData = async (userId, propertyId, rentData) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      return false;
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    const updates = {
+      rentEstimate: rentData.totalMonthlyRent || rentData.rentEstimate || null,
+      rentRangeLow: rentData.rentRangeLow || null,
+      rentRangeHigh: rentData.rentRangeHigh || null,
+      unitCount: rentData.unitCount || 1,
+      isMultiFamily: rentData.isMultiFamily || (rentData.unitCount > 1),
+      rentCastData: rentData,
+      rentSource: 'RentCast',
+      rentDataUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(docRef, updates);
+    console.log('✅ Property updated with rent data:', docId);
+    return true;
+  } catch (error) {
+    if (error.code === 'permission-denied') {
+      return false;
+    }
+    console.error('❌ Update rent data error:', error);
+    return false;
+  }
+};
+
+/**
+ * Update property analysis/metrics
+ * 
+ * Saves complete investment analysis results to property document. Called
+ * when user completes property analysis on PropertyAnalysisPage. Stores
+ * full analysis object plus extracted key metrics for quick display.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} analysis - Complete analysis object from calculator
+ * @param {number} [analysis.score] - Investment score (0-100)
+ * @param {number} [analysis.monthlyCashFlow] - Monthly cash flow
+ * @param {number} [analysis.capRate] - Cap rate percentage
+ * @param {Object} [analysis.quickAnalysis] - All investment ratios
+ * @param {Object} [analysis.cashflow] - Cash flow details
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * const analysis = calculator.getCompleteAnalysis();
+ * await updatePropertyAnalysis(user.uid, propertyId, analysis);
+ */
+export const updatePropertyAnalysis = async (userId, propertyId, analysis) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    const updates = {
+      analysis: analysis,
+      quickScore: analysis?.score || analysis?.investmentScore || null,
+      estimatedCashFlow: analysis?.monthlyCashFlow || null,
+      estimatedCapRate: analysis?.capRate || null,
+      analysisUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(docRef, updates);
+    console.log('✅ Property analysis updated:', docId);
+  } catch (error) {
+    console.error('❌ Update analysis error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property notes
+ * 
+ * Updates user's personal notes for a property. Notes are freeform text
+ * stored per property for user's reference.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {string} notes - Notes text
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyNotes(user.uid, propertyId, 
+ *   'Great location near schools. Needs new roof.'
+ * );
+ */
+export const updatePropertyNotes = async (userId, propertyId, notes) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      notes: notes,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property notes updated:', docId);
+  } catch (error) {
+    console.error('❌ Update notes error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property tags
+ * 
+ * Updates user's custom tags for organizing properties. Tags are array of
+ * strings for categorization (e.g., ['favorite', 'duplex', 'needs-work']).
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Array&lt;string>} tags - Array of tag strings
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyTags(user.uid, propertyId, 
+ *   ['favorite', 'multi-family', 'high-roi']
+ * );
+ */
+export const updatePropertyTags = async (userId, propertyId, tags) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      tags: tags,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property tags updated:', docId);
+  } catch (error) {
+    console.error('❌ Update tags error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update property thumbnail
+ * 
+ * Updates thumbnail URL for a property. Used to fix missing thumbnails or
+ * upgrade to higher quality images. Thumbnail is critical for My Properties
+ * page display.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {string} thumbnailUrl - New thumbnail URL
+ * @returns {Promise&lt;void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyThumbnail(
+ *   user.uid, 
+ *   propertyId, 
+ *   'https://example.com/property-thumb.jpg'
+ * );
+ */
+export const updatePropertyThumbnail = async (userId, propertyId, thumbnailUrl) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !propertyId) {
+      throw new Error('Valid User ID and Property ID required');
+    }
+    
+    const docId = `${userId}_${propertyId}`;
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await updateDoc(docRef, { 
+      thumbnail: thumbnailUrl,
+      updatedAt: serverTimestamp() 
+    });
+    console.log('✅ Property thumbnail updated:', docId);
+  } catch (error) {
+    console.error('❌ Update thumbnail error:', error);
+    throw error;
+  }
+};
+/**
+ * Default module export with all database functions
+ * 
+ * @memberof module:services/database 
+ * @type {Object}
+ * @property {Function} saveProperty - Save property to collection
+ * @property {Function} isPropertySaved - Check if property is saved
+ * @property {Function} unsaveProperty - Remove property from collection
+ * @property {Function} getSavedProperties - Get all user's saved properties
+ * @property {Function} getSavedProperty - Get single saved property
+ * @property {Function} updateSavedProperty - Generic update function
+ * @property {Function} updatePropertyWithRentData - Update with RentCast data
+ * @property {Function} updatePropertyAnalysis - Update with analysis results
+ * @property {Function} updatePropertyNotes - Update user notes
+ * @property {Function} updatePropertyTags - Update user tags
+ * @property {Function} updatePropertyThumbnail - Update thumbnail URL
+ */
+export default {
+  saveProperty,
+  isPropertySaved,
+  unsaveProperty,
+  getSavedProperties,
+  getSavedProperty,
+  updateSavedProperty,
+  updatePropertyWithRentData,
+  updatePropertyAnalysis,
+  updatePropertyNotes,
+  updatePropertyTags,
+  updatePropertyThumbnail
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-components_analysis_BuyHoldProjections.html">components/analysis/BuyHoldProjections</a></li><li><a href="module-components_analysis_PurchaseWorksheet.html">components/analysis/PurchaseWorksheet</a></li><li><a href="module-components_features_ExpandedPropertyView.html">components/features/ExpandedPropertyView</a></li><li><a href="module-components_features_PropertiesGrid.html">components/features/PropertiesGrid</a></li><li><a href="module-components_features_PropertyCard.html">components/features/PropertyCard</a></li><li><a href="module-components_features_PropertyMap.html">components/features/PropertyMap</a></li><li><a href="module-config_firebase.html">config/firebase</a></li><li><a href="module-contexts_AuthContext.html">contexts/AuthContext</a></li><li><a href="module-hooks_useSavedProperties.html">hooks/useSavedProperties</a></li><li><a href="module-pages_Properties.html">pages/Properties</a></li><li><a href="module-pages_PropertyAnalysisPage.html">pages/PropertyAnalysisPage</a></li><li><a href="module-services_database.html">services/database</a></li><li><a href="module-services_realtyAPI.html">services/realtyAPI</a></li><li><a href="module-services_rentCastApi.html">services/rentCastApi</a></li></ul><h3>Classes</h3><ul><li><a href="BuyRentHoldCalculator.html">BuyRentHoldCalculator</a></li><li><a href="RentalPropertyCalculator.html">RentalPropertyCalculator</a></li></ul><h3>Global</h3><ul><li><a href="global.html#CurrencyInput">CurrencyInput</a></li><li><a href="global.html#DEFAULTS">DEFAULTS</a></li><li><a href="global.html#DEFAULT_SCORING_CONFIG">DEFAULT_SCORING_CONFIG</a></li><li><a href="global.html#Dashboard">Dashboard</a></li><li><a href="global.html#InlineInput">InlineInput</a></li><li><a href="global.html#NumberInput">NumberInput</a></li><li><a href="global.html#PercentInput">PercentInput</a></li><li><a href="global.html#Profile">Profile</a></li><li><a href="global.html#SCORING_PRESETS">SCORING_PRESETS</a></li><li><a href="global.html#applyScoringPreset">applyScoringPreset</a></li><li><a href="global.html#calculateDistance">calculateDistance</a></li><li><a href="global.html#calculateDynamicScore">calculateDynamicScore</a></li><li><a href="global.html#calculateInvestmentScore">calculateInvestmentScore</a></li><li><a href="global.html#calculateMonthlyPayment">calculateMonthlyPayment</a></li><li><a href="global.html#calculatePolygonArea">calculatePolygonArea</a></li><li><a href="global.html#calculatePrincipalPaidYear1">calculatePrincipalPaidYear1</a></li><li><a href="global.html#calculateProfileScore">calculateProfileScore</a></li><li><a href="global.html#calculateQuickScore">calculateQuickScore</a></li><li><a href="global.html#calculateVerifiedScore">calculateVerifiedScore</a></li><li><a href="global.html#clearCache">clearCache</a></li><li><a href="global.html#detectMultiFamily">detectMultiFamily</a></li><li><a href="global.html#detectMultiFamilyFromType">detectMultiFamilyFromType</a></li><li><a href="global.html#estimateRent">estimateRent</a></li><li><a href="global.html#estimateUnitsFromProperty">estimateUnitsFromProperty</a></li><li><a href="global.html#filterPropertiesInBoundary">filterPropertiesInBoundary</a></li><li><a href="global.html#formatArea">formatArea</a></li><li><a href="global.html#formatDistance">formatDistance</a></li><li><a href="global.html#getAvailableMetrics">getAvailableMetrics</a></li><li><a href="global.html#getCacheStats">getCacheStats</a></li><li><a href="global.html#getExpenseDefaults">getExpenseDefaults</a></li><li><a href="global.html#getFinancingDefaults">getFinancingDefaults</a></li><li><a href="global.html#getInvestmentTargets">getInvestmentTargets</a></li><li><a href="global.html#getInvestmentThresholds">getInvestmentThresholds</a></li><li><a href="global.html#getInvestorProfile">getInvestorProfile</a></li><li><a href="global.html#getPolygonCenter">getPolygonCenter</a></li><li><a href="global.html#getPreferredLocation">getPreferredLocation</a></li><li><a href="global.html#getPropertiesCountInBoundary">getPropertiesCountInBoundary</a></li><li><a href="global.html#getPropertyCoordinates">getPropertyCoordinates</a></li><li><a href="global.html#getPropertyDataOnHover">getPropertyDataOnHover</a></li><li><a href="global.html#getPropertyDetails">getPropertyDetails</a></li><li><a href="global.html#getRentEstimate">getRentEstimate</a></li><li><a href="global.html#getScoringPresets">getScoringPresets</a></li><li><a href="global.html#getScoringWeights">getScoringWeights</a></li><li><a href="global.html#hasPreferredLocation">hasPreferredLocation</a></li><li><a href="global.html#isPointInCircle">isPointInCircle</a></li><li><a href="global.html#isPointInPolygon">isPointInPolygon</a></li><li><a href="global.html#mapPropertyType">mapPropertyType</a></li><li><a href="global.html#meetsInvestmentCriteria">meetsInvestmentCriteria</a></li><li><a href="global.html#mergeScoringConfig">mergeScoringConfig</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#saveInvestorProfile">saveInvestorProfile</a></li><li><a href="global.html#toRad">toRad</a></li><li><a href="global.html#validateProfile">validateProfile</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Dec 22 2025 22:17:13 GMT-0500 (Eastern Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

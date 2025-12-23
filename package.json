@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docs": "jsdoc -c jsdoc.json",
+    "docs:clean": "rm -rf docs/api && jsdoc -c jsdoc.json",
+    "docs:serve": "npm run docs && npx http-server docs/api -p 8080 -o"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.4.3",
