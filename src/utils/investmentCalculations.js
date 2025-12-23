@@ -8,9 +8,23 @@
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
-
 /**
  * Calculate monthly mortgage payment using PMT formula
+ * 
+ * Uses the standard amortization formula to calculate monthly payment:
+ * Payment = P * [r(1+r)^n] / [(1+r)^n - 1]
+ * Where: P = principal, r = monthly rate, n = number of payments
+ * 
+ * @function
+ * @param {number} principal - Loan principal amount in dollars
+ * @param {number} annualRate - Annual interest rate as percentage (e.g., 7.0 for 7%)
+ * @param {number} years - Loan term in years (e.g., 30)
+ * @returns {number} Monthly payment amount in dollars
+ * 
+ * @example
+ * // Calculate payment for $200,000 loan at 7% for 30 years
+ * const payment = calculateMonthlyPayment(200000, 7.0, 30);
+ * console.log(payment); // 1330.60
  */
 function calculateMonthlyPayment(principal, annualRate, years) {
   if (!principal || principal === 0) return 0;
@@ -26,6 +40,19 @@ function calculateMonthlyPayment(principal, annualRate, years) {
 
 /**
  * Calculate total principal paid in Year 1
+ * 
+ * Amortizes the loan month-by-month for the first year to determine
+ * total principal paydown. This is used for equity ROI calculations.
+ * 
+ * @function
+ * @param {number} loanAmount - Initial loan amount in dollars
+ * @param {number} monthlyPayment - Monthly payment amount in dollars
+ * @param {number} annualRate - Annual interest rate as percentage
+ * @returns {number} Total principal paid in first year
+ * 
+ * @example
+ * const principal = calculatePrincipalPaidYear1(200000, 1330.60, 7.0);
+ * console.log(principal); // ~3,800
  */
 function calculatePrincipalPaidYear1(loanAmount, monthlyPayment, annualRate) {
   if (!loanAmount || !monthlyPayment) return 0;
@@ -47,14 +74,78 @@ function calculatePrincipalPaidYear1(loanAmount, monthlyPayment, annualRate) {
 // =============================================================================
 // MAIN CALCULATOR CLASS
 // =============================================================================
+/**
+ * Buy, Rent, and Hold investment calculator
+ * 
+ * Comprehensive calculator class that matches Excel spreadsheet methodology.
+ * Calculates all financial metrics for rental property investment analysis
+ * including purchase costs, financing, income, expenses, NOI, cash flow,
+ * and investment returns.
+ * 
+ * @class
+ * 
+ * @example
+ * const property = { address: '123 Main St', price: 250000 };
+ * const inputs = {
+ *   offerPrice: 250000,
+ *   repairs: 10000,
+ *   grossRents: 24000,
+ *   firstMtgLTV: 80,
+ *   firstMtgRate: 7.0
+ * };
+ * 
+ * const calculator = new BuyRentHoldCalculator(property, inputs);
+ * const analysis = calculator.getCompleteAnalysis();
+ * console.log(analysis.quickAnalysis.cashOnCashROI); // 8.5%
+ */
 
 export class BuyRentHoldCalculator {
+  /**
+   * Create a calculator instance
+   * 
+   * @constructor
+   * @param {Object} property - Property data object
+   * @param {string} [property.address] - Property address
+   * @param {number} [property.price] - Property list price
+   * @param {number} [property.beds] - Number of bedrooms
+   * @param {number} [property.baths] - Number of bathrooms
+   * @param {Object} inputs - Investment calculation inputs
+   * @param {number} inputs.offerPrice - Proposed offer price
+   * @param {number} [inputs.fairMarketValue] - Fair market value (defaults to offerPrice)
+   * @param {number} [inputs.repairs=0] - Estimated repair costs
+   * @param {number} [inputs.purchaseCostsPercent=3.0] - Closing costs as percentage
+   * @param {number} [inputs.firstMtgLTV=80] - Loan-to-value ratio as percentage
+   * @param {number} [inputs.firstMtgRate=7.0] - Mortgage interest rate as percentage
+   * @param {number} [inputs.firstMtgAmortization=30] - Loan term in years
+   * @param {number} inputs.grossRents - Annual gross rental income
+   * @param {number} [inputs.vacancyRate=5.0] - Vacancy rate as percentage
+   * @param {number} [inputs.managementRate=10.0] - Management fee as percentage
+   * @param {number} [inputs.propertyTaxes=0] - Annual property taxes
+   * @param {number} [inputs.insurance=0] - Annual insurance cost
+   * @param {number} [inputs.appreciationRate=3.0] - Annual appreciation as percentage
+   */
   constructor(property, inputs) {
     this.property = property || {};
     this.inputs = inputs || {};
   }
 
   // SECTION 1: Property Info
+
+  /**
+   * Get property information
+   * 
+   * Extracts and standardizes property details from inputs and property data.
+   * Provides default values for missing fields.
+   * 
+   * @returns {Object} Property information
+   * @returns {string} returns.address - Property address
+   * @returns {number} returns.fairMarketValue - Fair market value
+   * @returns {number} returns.vacancyRate - Vacancy rate percentage
+   * @returns {number} returns.managementRate - Management rate percentage
+   * @returns {number} returns.advertisingCost - Advertising cost
+   * @returns {number} returns.numberOfUnits - Number of rental units
+   * @returns {number} returns.appreciationRate - Annual appreciation percentage
+   */
   getPropertyInfo() {
     return {
       address: this.property.address || '',
@@ -68,6 +159,30 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 2: Purchase Info → Real Purchase Price (RPP)
+  /**
+   * Calculate purchase information and Real Purchase Price (RPP)
+   * 
+   * Computes the total cost of acquisition including offer price, repairs,
+   * and all closing costs. Supports both percentage-based and itemized
+   * closing costs.
+   * 
+   * Formula: RPP = Offer Price + Repairs + Repairs Contingency + Closing Costs
+   * 
+   * @returns {Object} Purchase details
+   * @returns {number} returns.offerPrice - Proposed offer price
+   * @returns {number} returns.repairs - Repair costs
+   * @returns {number} returns.repairsContingency - Additional repair buffer
+   * @returns {number} returns.closingCosts - Total closing costs
+   * @returns {number} returns.realPurchasePrice - Total acquisition cost (RPP)
+   * @returns {number} returns.lenderFee - Lender fees
+   * @returns {number} returns.brokerFee - Broker fees
+   * @returns {number} returns.environmentals - Environmental inspection costs
+   * @returns {number} returns.inspections - Home inspection costs
+   * @returns {number} returns.appraisals - Appraisal costs
+   * @returns {number} returns.misc - Miscellaneous costs
+   * @returns {number} returns.transferTax - Transfer tax
+   * @returns {number} returns.legal - Legal fees
+   */
   calculatePurchaseInfo() {
     const {
       offerPrice = 0,
@@ -114,6 +229,29 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 3: Financing → Cash Required to Close
+  /**
+   * 
+   * Computes mortgage details for up to three loan types (first mortgage,
+   * second mortgage, interest-only), calculates monthly payments, and
+   * determines total cash needed at closing.
+   * 
+   * Supports CMHC insurance fees (Canadian mortgage insurance).
+   * 
+   * @returns {Object} Financing details
+   * @returns {Object} returns.firstMtg - First mortgage details
+   * @returns {number} returns.firstMtg.principalBorrowed - Amount borrowed (before CMHC)
+   * @returns {number} returns.firstMtg.rate - Interest rate percentage
+   * @returns {number} returns.firstMtg.amortization - Loan term in years
+   * @returns {number} returns.firstMtg.cmhcFeePercent - CMHC fee percentage
+   * @returns {number} returns.firstMtg.cmhcAmount - CMHC fee amount
+   * @returns {number} returns.firstMtg.totalPrincipal - Total loan including CMHC
+   * @returns {number} returns.firstMtg.monthlyPayment - Monthly P&I payment
+   * @returns {number} returns.firstMtg.ltv - Loan-to-value percentage
+   * @returns {Object} returns.secondMtg - Second mortgage details
+   * @returns {Object} returns.interestOnly - Interest-only loan details
+   * @returns {number} returns.otherMonthlyFinancingCosts - Other monthly costs
+   * @returns {number} returns.cashRequiredToClose - Total cash needed at closing
+   */
   calculateFinancing() {
     const purchase = this.calculatePurchaseInfo();
     const { offerPrice } = this.inputs;
@@ -175,7 +313,25 @@ export class BuyRentHoldCalculator {
     };
   }
 
-  // SECTION 4: Income Annual → Effective Gross Income
+  // SECTION 4: Income Annual → Effective Gross Income(EGI)
+  /**
+   * 
+   * Computes total rental income from all sources, subtracts vacancy loss,
+   * and calculates EGI which is used for NOI calculation.
+   * 
+   * Formula: EGI = Total Income - (Total Income × Vacancy Rate)
+   * 
+   * @returns {Object} Income details
+   * @returns {number} returns.grossRents - Annual gross rents
+   * @returns {number} returns.parking - Annual parking income
+   * @returns {number} returns.storage - Annual storage income
+   * @returns {number} returns.laundry - Annual laundry income
+   * @returns {number} returns.otherIncome - Other annual income
+   * @returns {number} returns.totalIncome - Total annual income (before vacancy)
+   * @returns {number} returns.vacancyLoss - Expected vacancy loss
+   * @returns {number} returns.vacancyRate - Vacancy rate percentage
+   * @returns {number} returns.effectiveGrossIncome - EGI (total income minus vacancy)
+   */
   calculateIncome() {
     const {
       grossRents = 0,
@@ -204,6 +360,26 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 5: Operating Expenses Annual
+  /**
+   * 
+   * Computes all operating expenses for the property. Repairs and management
+   * are calculated as percentages of gross rents (Excel methodology).
+   * All other expenses are entered as fixed annual amounts.
+   * 
+   * @returns {Object} Operating expenses breakdown
+   * @returns {number} returns.propertyTaxes - Annual property taxes
+   * @returns {number} returns.insurance - Annual insurance cost
+   * @returns {number} returns.repairs - Annual repairs (calculated from gross rents)
+   * @returns {number} returns.repairsPercent - Repairs percentage of gross rents
+   * @returns {number} returns.management - Annual management fee (calculated)
+   * @returns {number} returns.managementPercent - Management percentage of gross rents
+   * @returns {number} returns.electricity - Annual electricity cost
+   * @returns {number} returns.gas - Annual gas cost
+   * @returns {number} returns.waterSewer - Annual water/sewer cost
+   * @returns {number} returns.cable - Annual cable/internet cost
+   * @returns {number} returns.associationFees - Annual HOA/condo fees
+   * @returns {number} returns.totalExpenses - Total annual operating expenses
+   */
   calculateOperatingExpenses() {
     const income = this.calculateIncome();
     const propertyInfo = this.getPropertyInfo();
@@ -275,6 +451,20 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 6: Net Operating Income
+   /**
+   * Calculate Net Operating Income (NOI)
+   * 
+   * NOI is the income remaining after all operating expenses but before
+   * debt service (mortgage payments). This is a key metric used to calculate
+   * Cap Rate and other investment ratios.
+   * 
+   * Formula: NOI = Effective Gross Income - Total Operating Expenses
+   * 
+   * @returns {Object} NOI calculation
+   * @returns {number} returns.effectiveGrossIncome - EGI (income after vacancy)
+   * @returns {number} returns.totalExpenses - Total annual operating expenses
+   * @returns {number} returns.netOperatingIncome - NOI (annual)
+   */
   calculateNOI() {
     const income = this.calculateIncome();
     const expenses = this.calculateOperatingExpenses();
@@ -288,6 +478,18 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 7: Cash Requirements
+    /**
+   * Calculate total cash requirements
+   * 
+   * Determines total cash needed including down payment, closing costs,
+   * deposits, and any prorations. This is the denominator for Cash-on-Cash ROI.
+   * 
+   * @returns {Object} Cash requirements
+   * @returns {number} returns.deposits - Security deposits or reserves
+   * @returns {number} returns.lessProRation - Credits or prorations
+   * @returns {number} returns.cashRequiredToClose - Cash needed at closing
+   * @returns {number} returns.totalCashRequired - Total cash investment
+   */
   calculateCashRequirements() {
     const financing = this.calculateFinancing();
     const { deposits = 0, lessProRation = 0 } = this.inputs;
@@ -302,6 +504,23 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 8: Cashflow Summary Annual
+   /**
+   * 
+   * Computes annual and monthly cash flow by subtracting all expenses and
+   * debt service from effective income. Provides per-unit cash flow for
+   * multi-family properties.
+   * 
+   * Formula: Cash Flow = NOI - Annual Debt Service
+   * 
+   * @returns {Object} Cashflow summary
+   * @returns {number} returns.effectiveGrossIncome - Annual EGI
+   * @returns {number} returns.operatingExpenses - Annual operating expenses
+   * @returns {number} returns.netOperatingIncome - Annual NOI
+   * @returns {number} returns.debtServicingCosts - Annual debt service (all loans)
+   * @returns {number} returns.annualProfitOrLoss - Annual cash flow
+   * @returns {number} returns.totalMonthlyProfitOrLoss - Monthly cash flow
+   * @returns {number} returns.cashflowPerUnitPerMonth - Monthly cash flow per unit
+   */
   calculateCashflowSummary() {
     const income = this.calculateIncome();
     const expenses = this.calculateOperatingExpenses();
@@ -334,6 +553,30 @@ export class BuyRentHoldCalculator {
   }
 
   // SECTION 9: Quick Analysis - All Ratios
+  /**
+   * Calculate quick analysis with all investment ratios
+   * 
+   * Computes all key investment metrics including Cap Rate, Cash-on-Cash ROI,
+   * Debt Coverage Ratio, GRM, Equity ROI, Appreciation ROI, and Total ROI.
+   * These metrics are used for investment scoring and comparison.
+   * 
+   * @returns {Object} Complete investment ratios
+   * @returns {number} returns.firstMtgLTV - First mortgage LTV percentage
+   * @returns {number} returns.firstMtgLTPP - First mortgage loan-to-purchase-price
+   * @returns {number} returns.capRateOnPP - Cap rate based on purchase price
+   * @returns {number} returns.capRateOnFMV - Cap rate based on fair market value
+   * @returns {number} returns.averageRent - Average rent per unit per month
+   * @returns {number} returns.grm - Gross Rent Multiplier (years to payback)
+   * @returns {number} returns.dcr - Debt Coverage Ratio
+   * @returns {number} returns.cashOnCashROI - Cash-on-Cash return percentage
+   * @returns {number} returns.equityROI - Equity buildup return percentage
+   * @returns {number} returns.appreciationROI - Appreciation return percentage
+   * @returns {number} returns.totalROI - Total return on investment percentage
+   * @returns {number} returns.forcedAppROI - Forced appreciation return
+   * @returns {number} returns.expenseToIncomeRatio - Expense ratio percentage
+   * @returns {number} returns.principalPaidYear1 - Total principal paid in year 1
+   * @returns {number} returns.appreciationValue - Dollar appreciation in year 1
+   */
   calculateQuickAnalysis() {
     const propertyInfo = this.getPropertyInfo();
     const purchase = this.calculatePurchaseInfo();
@@ -411,8 +654,29 @@ export class BuyRentHoldCalculator {
       appreciationValue
     };
   }
-
-  // Investment Score Calculation
+  /**
+   * Calculate investment score (0-100)
+   * 
+   * Assigns a numerical score to the investment based on key metrics:
+   * - Cash on Cash ROI (25 points)
+   * - Cap Rate (20 points)
+   * - Debt Coverage Ratio (20 points)
+   * - Monthly Cash Flow (20 points)
+   * - Total ROI (15 points)
+   * 
+   * Score ranges:
+   * - 85-100: Excellent (outstanding investment)
+   * - 70-84: Good (solid returns expected)
+   * - 50-69: Fair (average returns)
+   * - 30-49: Risky (below average metrics)
+   * - 0-29: Avoid (poor investment, negative cash flow likely)
+   * 
+   * @returns {Object} Investment score details
+   * @returns {number} returns.score - Investment score (0-100)
+   * @returns {number} returns.maxScore - Maximum possible score (100)
+   * @returns {string} returns.badge - Badge label (excellent/good/fair/risky/avoid)
+   * @returns {string} returns.description - Score description
+   */
   calculateInvestmentScore() {
     const qa = this.calculateQuickAnalysis();
     const cashflow = this.calculateCashflowSummary();
@@ -477,7 +741,36 @@ export class BuyRentHoldCalculator {
     return { score, maxScore: 100, badge, description };
   }
 
-  // Get Complete Analysis
+  /**
+   * Get complete investment analysis
+   * 
+   * Executes all calculation methods and returns a comprehensive analysis
+   * object containing property info, purchase details, financing, income,
+   * expenses, NOI, cash requirements, cash flow, investment ratios, and
+   * investment score.
+   * 
+   * This is the main method to call for a complete property analysis.
+   * 
+   * @returns {Object} Complete analysis
+   * @returns {Object} returns.propertyInfo - Property information
+   * @returns {Object} returns.purchase - Purchase details and RPP
+   * @returns {Object} returns.financing - Financing and mortgage details
+   * @returns {Object} returns.income - Income breakdown and EGI
+   * @returns {Object} returns.expenses - Operating expenses
+   * @returns {Object} returns.noi - Net Operating Income
+   * @returns {Object} returns.cashRequirements - Cash needed at closing
+   * @returns {Object} returns.cashflow - Cash flow summary
+   * @returns {Object} returns.quickAnalysis - All investment ratios
+   * @returns {Object} returns.investmentScore - Investment score (0-100)
+   * 
+   * @example
+   * const calculator = new BuyRentHoldCalculator(property, inputs);
+   * const analysis = calculator.getCompleteAnalysis();
+   * 
+   * console.log(analysis.quickAnalysis.cashOnCashROI); // 8.5
+   * console.log(analysis.cashflow.totalMonthlyProfitOrLoss); // 450
+   * console.log(analysis.investmentScore.score); // 75
+   */
   getCompleteAnalysis() {
     return {
       propertyInfo: this.getPropertyInfo(),
@@ -498,6 +791,47 @@ export class BuyRentHoldCalculator {
 // QUICK SCORE FOR PROPERTY CARDS (Original)
 // =============================================================================
 
+/**
+ * Calculate quick investment score for property preview cards
+ * 
+ * Fast calculation using simplified assumptions for property card hover previews.
+ * Uses default financing terms and estimates operating expenses as percentages.
+ * Returns a 0-100 score with badge and breakdown of contributing metrics.
+ * 
+ * This is lighter-weight than the full BuyRentHoldCalculator and suitable
+ * for quick comparisons when browsing property listings.
+ * 
+ * @function
+ * @param {number} price - Property list price
+ * @param {number} rentEstimate - Estimated monthly rent
+ * @param {Object} [propertyData={}] - Optional property data for customization
+ * @param {number} [propertyData.downPaymentPercent=20] - Down payment percentage
+ * @param {number} [propertyData.interestRate=7.0] - Interest rate percentage
+ * @param {number} [propertyData.loanTermYears=30] - Loan term in years
+ * @param {number} [propertyData.vacancyRate=5] - Vacancy rate percentage
+ * @param {number} [propertyData.managementRate=10] - Management fee percentage
+ * @param {number} [propertyData.maintenanceRate=5] - Maintenance percentage
+ * @param {Object|null} [scoringConfig=null] - Custom scoring configuration
+ * @returns {Object} Quick score result
+ * @returns {number} returns.score - Investment score (0-100)
+ * @returns {string} returns.badge - Badge (excellent/good/fair/risky/avoid)
+ * @returns {string} returns.color - Color code (emerald/green/yellow/orange/red)
+ * @returns {string} returns.description - Score description
+ * @returns {Object} returns.breakdown - Score breakdown by metric
+ * @returns {number} returns.monthlyCashFlow - Monthly cash flow estimate
+ * @returns {number} returns.annualCashFlow - Annual cash flow estimate
+ * @returns {number} returns.capRate - Cap rate percentage
+ * @returns {number} returns.cashOnCashROI - Cash-on-Cash ROI percentage
+ * @returns {number} returns.dcr - Debt Coverage Ratio
+ * @returns {number} returns.noi - Net Operating Income (annual)
+ * @returns {number} returns.totalCashRequired - Total cash needed
+ * 
+ * @example
+ * const score = calculateQuickScore(250000, 2000);
+ * console.log(score.score); // 68
+ * console.log(score.badge); // "good"
+ * console.log(score.monthlyCashFlow); // 324
+ */
 export function calculateQuickScore(price, rentEstimate, propertyData = {}, scoringConfig = null) {
   if (!price || !rentEstimate) {
     return { 
@@ -635,8 +969,33 @@ export function calculateQuickScore(price, rentEstimate, propertyData = {}, scor
 // ADDITIONAL EXPORTS (for components that need these)
 // =============================================================================
 
-// Alias for backwards compatibility
+/**
+ * Alias for BuyRentHoldCalculator
+ * @class
+ * @deprecated Use BuyRentHoldCalculator instead
+ */
 export const RentalPropertyCalculator = BuyRentHoldCalculator;
+
+/**
+ * Calculate verified investment score
+ * 
+ * Same as calculateQuickScore but marks the result as verified from RentCast API.
+ * This indicates the rent estimate comes from actual market data rather than
+ * an internal estimation.
+ * 
+ * @function
+ * @param {number} price - Property list price
+ * @param {number} rentEstimate - Verified monthly rent from RentCast API
+ * @param {Object} [propertyData={}] - Optional property data
+ * @returns {Object} Score result with verified flag and source
+ * @returns {boolean} returns.verified - Always true
+ * @returns {string} returns.source - Always "RentCast API"
+ * 
+ * @example
+ * const score = calculateVerifiedScore(250000, 2150, propertyData);
+ * console.log(score.verified); // true
+ * console.log(score.source); // "RentCast API"
+ */
 
 // Verified score (same as quick score but marked as verified from API)
 export function calculateVerifiedScore(price, rentEstimate, propertyData = {}) {
@@ -644,7 +1003,36 @@ export function calculateVerifiedScore(price, rentEstimate, propertyData = {}) {
   return { ...result, verified: true, source: 'RentCast API' };
 }
 
-// Multi-family detection
+/**
+ * Detect if property is multi-family
+ * 
+ * Attempts to determine if a property has multiple rental units by checking:
+ * 1. RentCast API unit count data
+ * 2. User input for number of units
+ * 3. Property type keywords (duplex, triplex, fourplex, apartment, multi-family)
+ * 4. Defaults to single-family if no indicators found
+ * 
+ * @function
+ * @param {Object} property - Property data object
+ * @param {Object} [property.rentCastData] - RentCast API data
+ * @param {Object} [property.rentCastData.features] - Property features
+ * @param {number} [property.rentCastData.features.unitCount] - Unit count from API
+ * @param {string} [property.propertyType] - Property type description
+ * @param {string} [property.type] - Alternate property type field
+ * @param {number} [property.beds] - Number of bedrooms (used for estimation)
+ * @param {Object} inputs - User inputs
+ * @param {number} [inputs.numberOfUnits] - User-specified unit count
+ * @returns {Object} Multi-family detection result
+ * @returns {boolean} returns.isMultiFamily - True if property has multiple units
+ * @returns {number} returns.units - Number of units detected
+ * @returns {string} returns.source - Detection source (RentCast/Input/Type/Default)
+ * 
+ * @example
+ * const result = detectMultiFamily(property, inputs);
+ * if (result.isMultiFamily) {
+ *   console.log(`${result.units}-unit property detected via ${result.source}`);
+ * }
+ */
 export function detectMultiFamily(property, inputs) {
   if (property?.rentCastData?.features?.unitCount > 1) {
     return { isMultiFamily: true, units: property.rentCastData.features.unitCount, source: 'RentCast' };
@@ -661,8 +1049,21 @@ export function detectMultiFamily(property, inputs) {
   if (type.includes('fourplex')) return { isMultiFamily: true, units: 4, source: 'Type' };
   return { isMultiFamily: false, units: 1, source: 'Default' };
 }
-
-// Scoring config
+/**
+ * Default scoring configuration
+ * 
+ * Standard weights and thresholds for investment scoring algorithm.
+ * Used when no custom configuration is provided.
+ * 
+ * @constant {Object}
+ * @property {Object} weights - Metric weights (must sum to 100)
+ * @property {number} weights.cashOnCash - Cash-on-Cash ROI weight (25 points)
+ * @property {number} weights.capRate - Cap Rate weight (20 points)
+ * @property {number} weights.dcr - Debt Coverage Ratio weight (20 points)
+ * @property {number} weights.monthlyCashflow - Monthly Cash Flow weight (20 points)
+ * @property {number} weights.totalROI - Total ROI weight (15 points)
+ * @property {Object} thresholds - Performance thresholds for each metric
+ */
 export const DEFAULT_SCORING_CONFIG = {
   weights: { cashOnCash: 25, capRate: 20, dcr: 20, monthlyCashflow: 20, totalROI: 15 },
   thresholds: {
@@ -674,6 +1075,27 @@ export const DEFAULT_SCORING_CONFIG = {
   }
 };
 
+/**
+ * Preset scoring configurations for different investor profiles
+ * 
+ * Three predefined scoring configurations optimized for different
+ * investment strategies:
+ * 
+ * - **Conservative**: Prioritizes safety, higher DCR requirements, demands
+ *   strong cash flow cushion
+ * - **Moderate**: Balanced approach, standard thresholds for all metrics
+ * - **Aggressive**: Growth-focused, accepts lower DCR and negative cash flow
+ *   for appreciation potential
+ * 
+ * @constant {Object}
+ * @property {Object} conservative - Conservative investor profile
+ * @property {Object} moderate - Moderate/balanced investor profile
+ * @property {Object} aggressive - Aggressive/growth investor profile
+ * 
+ * @example
+ * const config = SCORING_PRESETS.conservative;
+ * const score = calculateDynamicScore(metrics, config);
+ */
 export const SCORING_PRESETS = {
   conservative: {
     metrics: {
@@ -719,7 +1141,29 @@ export const SCORING_PRESETS = {
   }
 };
 
-// Rent estimation
+/**
+ * Estimate monthly rent based on property price
+ * 
+ * Simple rule-of-thumb estimation when rental data is unavailable.
+ * Uses sliding multipliers based on price ranges. Not as accurate as
+ * RentCast API data but provides a reasonable fallback estimate.
+ * 
+ * Price ranges:
+ * - Under $150k: 0.9% of price per month
+ * - $150k-$300k: 0.8% of price per month
+ * - $300k-$500k: 0.7% of price per month
+ * - Over $500k: 0.5% of price per month
+ * 
+ * @function
+ * @param {Object} property - Property data
+ * @param {number} [property.price] - Property price
+ * @param {number} [property.list_price] - Alternate price field
+ * @returns {number} Estimated monthly rent (rounded to nearest $50)
+ * 
+ * @example
+ * const rent = estimateRent({ price: 250000 });
+ * console.log(rent); // 2000 (rounded)
+ */
 export function estimateRent(property) {
   const price = property?.price || property?.list_price || 0;
   if (!price) return 0;
@@ -727,7 +1171,24 @@ export function estimateRent(property) {
   return Math.round((price * mult) / 50) * 50;
 }
 
-// Merge scoring config
+/**
+ * Merge scoring configurations
+ * 
+ * Deep merges base configuration with overrides to create custom scoring config.
+ * Useful for allowing users to customize specific thresholds while keeping
+ * other settings at defaults.
+ * 
+ * @function
+ * @param {Object} [base={}] - Base configuration object
+ * @param {Object} [override={}] - Override configuration object
+ * @returns {Object} Merged configuration with weights and thresholds
+ * 
+ * @example
+ * const custom = mergeScoringConfig(
+ *   DEFAULT_SCORING_CONFIG,
+ *   { thresholds: { cashOnCash: { excellent: 15 } } }
+ * );
+ */
 export function mergeScoringConfig(base = {}, override = {}) {
   return {
     weights: { ...DEFAULT_SCORING_CONFIG.weights, ...base.weights, ...override.weights },
@@ -735,7 +1196,34 @@ export function mergeScoringConfig(base = {}, override = {}) {
   };
 }
 
-// Calculate dynamic score with custom config
+/**
+ * Calculate dynamic investment score with custom configuration
+ * 
+ * Scores an investment using provided metrics and custom scoring configuration.
+ * Allows for flexible weighting and threshold adjustments based on investor
+ * preferences or market conditions.
+ * 
+ * @function
+ * @param {Object} metrics - Investment metrics to score
+ * @param {number} metrics.cashOnCashROI - Cash-on-Cash return percentage
+ * @param {number} metrics.capRate - Cap rate percentage
+ * @param {number} metrics.dcr - Debt coverage ratio
+ * @param {number} metrics.monthlyCashflow - Monthly cash flow in dollars
+ * @param {number} metrics.totalROI - Total return percentage
+ * @param {Object} [config=DEFAULT_SCORING_CONFIG] - Scoring configuration
+ * @returns {number} Investment score (0-100)
+ * 
+ * @example
+ * const metrics = {
+ *   cashOnCashROI: 9.5,
+ *   capRate: 7.2,
+ *   dcr: 1.35,
+ *   monthlyCashflow: 425,
+ *   totalROI: 16.8
+ * };
+ * const score = calculateDynamicScore(metrics, SCORING_PRESETS.moderate);
+ * console.log(score); // 78
+ */
 export function calculateDynamicScore(metrics, config = DEFAULT_SCORING_CONFIG) {
   let score = 0;
   const { weights, thresholds } = config;
@@ -773,7 +1261,34 @@ export function calculateDynamicScore(metrics, config = DEFAULT_SCORING_CONFIG) 
   return Math.round(score);
 }
 
-// DEFAULTS object for components that import it
+/**
+ * Default values for investment calculations
+ * 
+ * Standard assumptions used throughout the application when user inputs
+ * are not provided. These represent typical market conditions and conservative
+ * investing approaches.
+ * 
+ * @constant {Object}
+ * @property {number} ltv - Loan-to-value ratio percentage (80% = 20% down)
+ * @property {number} interestRate - Annual mortgage interest rate (7.0%)
+ * @property {number} amortization - Loan term in years (30)
+ * @property {number} vacancyRate - Expected vacancy percentage (5%)
+ * @property {number} managementRate - Property management fee percentage (8%)
+ * @property {number} repairsPercent - Repairs as percentage of rent (5%)
+ * @property {number} purchaseCostsPercent - Closing costs percentage (3%)
+ * @property {number} appreciationRate - Annual appreciation percentage (3%)
+ * @property {number} incomeGrowthRate - Annual rent growth percentage (2%)
+ * @property {number} expenseGrowthRate - Annual expense inflation percentage (2%)
+ * 
+ * @example
+ * const inputs = {
+ *   offerPrice: 250000,
+ *   grossRents: 24000,
+ *   firstMtgLTV: DEFAULTS.ltv,
+ *   firstMtgRate: DEFAULTS.interestRate,
+ *   vacancyRate: DEFAULTS.vacancyRate
+ * };
+ */
 export const DEFAULTS = {
   // Financing
   ltv: 80,
@@ -807,7 +1322,25 @@ export const DEFAULTS = {
   holdingPeriod: 5
 };
 
-// Default export
+/**
+ * Default module export
+ * 
+ * Provides all calculator functions and classes in a single object
+ * for convenient importing.
+ * 
+ * @type {Object}
+ * @property {class} BuyRentHoldCalculator - Main calculator class
+ * @property {class} RentalPropertyCalculator - Alias for BuyRentHoldCalculator
+ * @property {Function} calculateQuickScore - Quick scoring function
+ * @property {Function} calculateVerifiedScore - Verified scoring function
+ * @property {Function} calculateDynamicScore - Dynamic scoring with config
+ * @property {Function} detectMultiFamily - Multi-family detection
+ * @property {Function} estimateRent - Rent estimation function
+ * @property {Function} mergeScoringConfig - Config merging utility
+ * @property {Object} DEFAULT_SCORING_CONFIG - Default scoring configuration
+ * @property {Object} SCORING_PRESETS - Preset scoring configurations
+ * @property {Object} DEFAULTS - Default calculation values
+ */
 export default { 
   BuyRentHoldCalculator, 
   RentalPropertyCalculator: BuyRentHoldCalculator,

@@ -1,13 +1,119 @@
 /**
- * RentCast API Service 
+ * @file RentCast API Service for rental estimates and property details
+ * @module services/rentCastApi
+ * @description Provides rental market data through the RentCast API including per-unit
+ * rent estimates, property details with unit counts, property tax information, and
+ * market statistics. Critical for multi-family property analysis as it provides
+ * accurate unit counts from public records.
+ * 
+ * CRITICAL FIX v2.0: Detects single units in buildings (condos/apartments) vs entire
+ * multi-family buildings to prevent incorrect rent multiplication.
+ * 
+ * @see {@link https://rentcast.io/api RentCast API Documentation}
+ * 
+ * @version 2.0.0
  */
 
+/**
+ * RentCast API key from environment variables
+ * @constant {string}
+ * @private
+ */
 const RENTCAST_API_KEY = import.meta.env.VITE_RENTCAST_API_KEY;
+/**
+ * Base URL for RentCast API v1
+ * @constant {string}
+ * @private
+ */
 const BASE_URL = 'https://api.rentcast.io/v1';
 
 /**
+ * Detect if this is a single unit within a building
+ * 
+ * CRITICAL FUNCTION: Prevents catastrophic error of multiplying single condo/apartment
+ * rent by total building units. Checks address for unit indicators like "Unit 40M",
+ * "Apt 5B", "#123", etc.
+ * 
+ * Example problem this fixes:
+ * - Property: "682 Atlantic Ave Unit 40M" (single condo)
+ * - RentCast returns: $3,000/month rent, 120 units in building
+ * - WITHOUT FIX: $3,000 × 120 = $360,000/month ❌ CATASTROPHIC ERROR
+ * - WITH FIX: $3,000 × 1 = $3,000/month ✅ CORRECT
+ * 
+ * @function
+ * @private
+ * @param {string} address - Property address
+ * @returns {boolean} True if this is a single unit (not entire building)
+ * 
+ * @example
+ * isSingleUnitInBuilding('682 Atlantic Ave Unit 40M'); // true
+ * isSingleUnitInBuilding('123 Main St Apt 5B');        // true
+ * isSingleUnitInBuilding('456 Elm St');                 // false (entire building/house)
+ */
+const isSingleUnitInBuilding = (address) => {
+  if (!address) return false;
+  
+  const addressLower = address.toLowerCase();
+  
+  // Check for unit indicators
+  const unitPatterns = [
+    /\bunit\s+[a-z0-9]+/i,     // "Unit 40M", "Unit 123"
+    /\b#\s*[a-z0-9]+/i,         // "#40M", "# 123"
+    /\bapt\.?\s+[a-z0-9]+/i,    // "Apt 40M", "Apt. 123"
+    /\bsuite\s+[a-z0-9]+/i,     // "Suite 40M"
+    /\bfloor\s+\d+/i,           // "Floor 12"
+    /,\s*[a-z0-9]+$/i,          // Ends with ", 40M" or ", 12B"
+  ];
+  
+  return unitPatterns.some(pattern => pattern.test(addressLower));
+};
+
+/**
  * Get rent estimate for a property by address
- * Endpoint: GET /avm/rent/long-term
+ * 
+ * Fetches market rent estimate from RentCast AVM (Automated Valuation Model).
+ * Returns PER UNIT rent for multi-family properties - must be multiplied by
+ * unit count for total rent calculation.
+ * 
+ * Uses comparable rental data from recent market transactions to estimate
+ * current market rent. Endpoint: GET /avm/rent/long-term
+ * 
+ * @memberof module:services/rentCastApi 
+ * @async
+ * @function
+ * @param {Object} params - Property parameters
+ * @param {string} params.address - Street address (required)
+ * @param {string} params.city - City name (required)
+ * @param {string} params.state - State code (required, e.g., 'FL', 'CA')
+ * @param {string} params.zipCode - ZIP code (required)
+ * @param {number} [params.bedrooms] - Number of bedrooms (improves accuracy)
+ * @param {number} [params.bathrooms] - Number of bathrooms (improves accuracy)
+ * @param {number} [params.squareFootage] - Property square footage
+ * @param {string} [params.propertyType] - Property type (Single Family, Condo, etc.)
+ * @returns {Promise<Object|null>} Rent estimate data or null if unavailable
+ * @returns {number|null} returns.rentEstimate - Estimated monthly rent PER UNIT
+ * @returns {number|null} returns.rentRangeLow - Low end of rent range
+ * @returns {number|null} returns.rentRangeHigh - High end of rent range
+ * @returns {number} returns.latitude - Property latitude
+ * @returns {number} returns.longitude - Property longitude
+ * @returns {Array<Object>} returns.comparables - Comparable properties used
+ * @returns {string} returns.source - Always 'RentCast'
+ * @returns {boolean} returns.isPerUnitRent - Always true (important flag)
+ * 
+ * @throws {Error} If API returns 401 (invalid key)
+ * @throws {Error} If API returns 404 (property not found)
+ * @throws {Error} If API returns 429 (rate limit exceeded)
+ * 
+ * @example
+ * const rentData = await getRentEstimate({
+ *   address: '123 Main St',
+ *   city: 'Miami',
+ *   state: 'FL',
+ *   zipCode: '33139',
+ *   bedrooms: 3,
+ *   bathrooms: 2
+ * });
+ * console.log(`Per-unit rent: $${rentData.rentEstimate}`);
  */
 export const getRentEstimate = async ({ 
   address, 
@@ -87,9 +193,53 @@ export const getRentEstimate = async ({
 
 /**
  * Get property details including unit count and tax info
- * Endpoint: GET /properties
  * 
- * CRITICAL: This endpoint returns features.unitCount for multi-family properties
+ * CRITICAL FUNCTION for multi-family properties. Retrieves property details
+ * from public records including the all-important features.unitCount field
+ * which provides accurate unit counts for duplexes, triplexes, apartments, etc.
+ * 
+ * Also provides property tax data, assessed values, HOA fees, and detailed
+ * property features from public records. Endpoint: GET /properties
+ * 
+ * @memberof module:services/rentCastApi 
+ * @async
+ * @function
+ * @param {Object} params - Property parameters
+ * @param {string} params.address - Street address (required)
+ * @param {string} params.city - City name (required)
+ * @param {string} params.state - State code (required)
+ * @param {string} params.zipCode - ZIP code (required)
+ * @returns {Promise<Object|null>} Property details or null if unavailable
+ * @returns {string} returns.propertyId - RentCast property ID
+ * @returns {string} returns.address - Street address
+ * @returns {string} returns.city - City name
+ * @returns {string} returns.state - State code
+ * @returns {string} returns.zipCode - ZIP code
+ * @returns {number} returns.bedrooms - Number of bedrooms
+ * @returns {number} returns.bathrooms - Number of bathrooms
+ * @returns {number} returns.squareFootage - Square footage
+ * @returns {number} returns.yearBuilt - Year built
+ * @returns {string} returns.propertyType - Property type
+ * @returns {number} returns.unitCount - NUMBER OF UNITS (critical field)
+ * @returns {boolean} returns.isMultiFamily - True if multi-family property
+ * @returns {Object} returns.features - Detailed property features
+ * @returns {number} returns.features.unitCount - Unit count (key field)
+ * @returns {number|null} returns.assessedValue - Most recent assessed value
+ * @returns {number|null} returns.taxAmount - Annual property taxes
+ * @returns {number|null} returns.hoaFee - Monthly HOA fee
+ * 
+ * @example
+ * const details = await getPropertyDetails({
+ *   address: '456 Duplex Dr',
+ *   city: 'Miami',
+ *   state: 'FL',
+ *   zipCode: '33139'
+ * });
+ * 
+ * if (details.isMultiFamily) {
+ *   console.log(`${details.unitCount}-unit property`);
+ *   console.log(`Tax: $${details.taxAmount}/year`);
+ * }
  */
 export const getPropertyDetails = async ({
   address,
@@ -247,6 +397,20 @@ export const getPropertyDetails = async ({
 
 /**
  * Detect multi-family from property type string
+ * 
+ * Helper function that checks property type string for multi-family indicators.
+ * Used in conjunction with unit count to determine if property is multi-family.
+ * 
+ * @memberof module:services/rentCastApi 
+ * @function
+ * @private
+ * @param {string} propertyType - Property type string from RentCast
+ * @returns {boolean} True if property type indicates multi-family
+ * 
+ * @example
+ * detectMultiFamilyFromType('Duplex'); // true
+ * detectMultiFamilyFromType('Single Family'); // false
+ * detectMultiFamilyFromType('Multi Family'); // true
  */
 const detectMultiFamilyFromType = (propertyType) => {
   if (!propertyType) return false;
@@ -263,10 +427,76 @@ const detectMultiFamilyFromType = (propertyType) => {
 
 /**
  * Get complete property data with rent estimate AND unit count
- * This is the MAIN function to use on Property Analysis Page
  * 
- * @param {Object} property - Property from Realty API
- * @returns {Object} - Complete data for calculations including unitCount
+ * THIS IS THE MAIN FUNCTION to use on Property Analysis Page.
+ * 
+ * CRITICAL FIX v2.0: Now detects single units in buildings (condos/apartments)
+ * vs entire multi-family buildings to prevent catastrophic rent multiplication errors.
+ * 
+ * Combines rent estimate and property details into single comprehensive object.
+ * Fetches both endpoints in parallel using Promise.all for optimal performance.
+ * Automatically calculates total monthly rent by multiplying per-unit rent
+ * by unit count ONLY for entire multi-family buildings, NOT single condos.
+ * 
+ * This function is CRITICAL for accurate multi-family analysis as it ensures
+ * the rent calculation accounts for all units when buying the entire building,
+ * but NOT when buying a single unit in a building.
+ * 
+ * @memberof module:services/rentCastApi 
+ * @async
+ * @function
+ * @param {Object} property - Property object from Realty API
+ * @param {Object} [property.location] - Location object with address details
+ * @param {Object} [property.location.address] - Address components
+ * @param {string} [property.address] - Alternate address field
+ * @param {string} [property.city] - City name
+ * @param {string} [property.state] - State code
+ * @param {string} [property.zipCode] - ZIP code
+ * @param {Object} [property.description] - Property description
+ * @param {number} [property.description.beds] - Bedrooms
+ * @param {number} [property.description.baths] - Bathrooms
+ * @returns {Promise<Object|null>} Complete property data or null
+ * @returns {number|null} returns.rentEstimate - Monthly rent PER UNIT
+ * @returns {number|null} returns.totalMonthlyRent - TOTAL rent (per-unit × units OR just per-unit for single units)
+ * @returns {number|null} returns.rentRangeLow - Low end of rent range
+ * @returns {number|null} returns.rentRangeHigh - High end of rent range
+ * @returns {Array<Object>} returns.comparables - Comparable rentals
+ * @returns {number} returns.unitCount - Number of units BEING PURCHASED (1 for condos, N for buildings)
+ * @returns {boolean} returns.isMultiFamily - True if multi-family BUILDING purchase
+ * @returns {boolean} returns.isSingleUnit - True if single unit in building (condo/apartment)
+ * @returns {number} returns.totalUnitsInBuilding - Total units in building (for reference)
+ * @returns {Object|null} returns.propertyDetails - Full property details
+ * @returns {number|null} returns.taxAmount - Annual property taxes
+ * @returns {number|null} returns.assessedValue - Assessed value
+ * @returns {number|null} returns.hoaFee - Monthly HOA fee
+ * @returns {Object|null} returns.features - Property features
+ * @returns {string} returns.source - Always 'RentCast'
+ * @returns {boolean} returns.hasRentData - True if rent data available
+ * @returns {boolean} returns.hasPropertyData - True if property data available
+ * 
+ * @example
+ * // Single condo in 120-unit building
+ * const data = await getCompletePropertyData({
+ *   address: '682 Atlantic Ave Unit 40M',
+ *   city: 'Boston',
+ *   state: 'MA'
+ * });
+ * console.log(`Rent: $${data.rentEstimate}`);          // $3,000 (per unit)
+ * console.log(`Unit count: ${data.unitCount}`);        // 1 (buying 1 unit)
+ * console.log(`Total rent: $${data.totalMonthlyRent}`); // $3,000 (NOT multiplied!)
+ * console.log(`Single unit: ${data.isSingleUnit}`);    // true
+ * console.log(`Building has: ${data.totalUnitsInBuilding}`); // 120 units
+ * 
+ * @example
+ * // Entire duplex building
+ * const data = await getCompletePropertyData({
+ *   address: '456 Elm St',
+ *   city: 'Miami',
+ *   state: 'FL'
+ * });
+ * console.log(`Per-unit rent: $${data.rentEstimate}`);  // $2,000
+ * console.log(`Unit count: ${data.unitCount}`);         // 2 (buying both units)
+ * console.log(`Total rent: $${data.totalMonthlyRent}`); // $4,000 (properly multiplied)
  */
 export const getCompletePropertyData = async (property) => {
   try {
@@ -307,37 +537,72 @@ export const getCompletePropertyData = async (property) => {
       getPropertyDetails({ address, city, state, zipCode })
     ]);
 
-    // Get unit count from property details (THE KEY FIX)
-    const unitCount = propertyDetails?.unitCount || 
-                      property.units || 
-                      estimateUnitsFromProperty(property);
+    // ============================================
+    // CRITICAL FIX: Detect single unit vs building
+    // ============================================
+    const isSingleUnit = isSingleUnitInBuilding(address);
     
-    const isMultiFamily = propertyDetails?.isMultiFamily || 
-                          unitCount > 1 ||
-                          detectMultiFamilyFromType(property.propertyType);
+    // Get total units in building from RentCast
+    const totalUnitsInBuilding = propertyDetails?.unitCount || 1;
+    
+    // Determine actual unit count for THIS purchase
+    let actualUnitCount;
+    let isMultiFamily;
+    let detectionReason;
+    
+    if (isSingleUnit) {
+      // Buying ONE unit in a multi-unit building (condo/apartment)
+      actualUnitCount = 1;
+      isMultiFamily = false;
+      detectionReason = `Single unit detected in ${totalUnitsInBuilding}-unit building`;
+      console.log(`📍 ${detectionReason}`);
+    } else if (totalUnitsInBuilding > 1) {
+      // Buying ENTIRE multi-family building
+      actualUnitCount = totalUnitsInBuilding;
+      isMultiFamily = true;
+      detectionReason = `Multi-family building (${actualUnitCount} units)`;
+      console.log(`🏢 ${detectionReason}`);
+    } else {
+      // Single family home
+      actualUnitCount = 1;
+      isMultiFamily = false;
+      detectionReason = 'Single family home';
+      console.log(`🏠 ${detectionReason}`);
+    }
 
-    // Calculate total rent (per unit × number of units)
+    // Calculate rent (per unit × number of units BEING PURCHASED)
     const perUnitRent = rentData?.rentEstimate || null;
-    const totalMonthlyRent = perUnitRent ? perUnitRent * unitCount : null;
+    const totalMonthlyRent = perUnitRent ? perUnitRent * actualUnitCount : null;
 
     console.log('📊 Rent Calculation:', {
+      address,
+      isSingleUnit,
+      totalUnitsInBuilding,
+      actualUnitCount,
       perUnitRent,
-      unitCount,
       totalMonthlyRent,
-      isMultiFamily
+      calculation: isSingleUnit 
+        ? `Single unit: $${perUnitRent}/month (NOT multiplied)`
+        : `Multi-family: $${perUnitRent} × ${actualUnitCount} units = $${totalMonthlyRent}/month`,
+      detectionReason
     });
 
     return {
       // Rent data
       rentEstimate: perUnitRent,           // Per unit rent
-      totalMonthlyRent: totalMonthlyRent,  // Total rent (per unit × units)
+      totalMonthlyRent: totalMonthlyRent,  // Total rent (correctly calculated)
       rentRangeLow: rentData?.rentRangeLow || null,
       rentRangeHigh: rentData?.rentRangeHigh || null,
       comparables: rentData?.comparables || [],
       
       // Unit information (THE KEY FIX)
-      unitCount: unitCount,
-      isMultiFamily: isMultiFamily,
+      unitCount: actualUnitCount,          // Units BEING PURCHASED
+      isMultiFamily: isMultiFamily,        // True only if buying entire building
+      
+      // Additional metadata for transparency
+      isSingleUnit: isSingleUnit,          // True if single unit in building
+      totalUnitsInBuilding: totalUnitsInBuilding, // Total units in building (for reference)
+      detectionReason: detectionReason,    // Why we chose this unit count
       
       // Property details from RentCast
       propertyDetails: propertyDetails,
@@ -364,12 +629,34 @@ export const getCompletePropertyData = async (property) => {
 
 /**
  * Estimate units from property data when RentCast doesn't have it
- * This is a fallback using property type and bed/bath counts
+ * 
+ * Fallback unit estimation using property type keywords and bedroom counts.
+ * This is used when RentCast doesn't provide unit count data. Less accurate
+ * than RentCast data but provides reasonable estimates.
+ * 
+ * @memberof module:services/rentCastApi 
+ * @function
+ * @private
+ * @param {Object} property - Property object
+ * @param {string} [property.propertyType] - Property type string
+ * @param {number} [property.beds] - Total bedrooms
+ * @param {number} [property.baths] - Total bathrooms
+ * @returns {number} Estimated unit count
+ * 
+ * @example
+ * const units = estimateUnitsFromProperty({
+ *   propertyType: 'Duplex',
+ *   beds: 4
+ * }); // Returns 2
+ * 
+ * const units2 = estimateUnitsFromProperty({
+ *   propertyType: 'Apartment',
+ *   beds: 8
+ * }); // Returns 4 (8 beds / 2 avg beds per unit)
  */
 const estimateUnitsFromProperty = (property) => {
   const propertyType = (property.propertyType || property.description?.type || '').toLowerCase();
   const beds = property.beds || property.description?.beds || 0;
-  const baths = property.baths || property.description?.baths || 0;
   
   // Explicit types
   if (propertyType.includes('duplex')) return 2;
@@ -390,6 +677,19 @@ const estimateUnitsFromProperty = (property) => {
 
 /**
  * Map Realty API property types to RentCast format
+ * 
+ * Converts property type strings from Realty-in-US format to RentCast
+ * expected format. RentCast uses title case while Realty uses snake_case.
+ * 
+ * @memberof module:services/rentCastApi 
+ * @function
+ * @private
+ * @param {string} type - Property type from Realty API
+ * @returns {string|undefined} RentCast-formatted type or undefined
+ * 
+ * @example
+ * mapPropertyType('single_family'); // 'Single Family'
+ * mapPropertyType('multi_family');  // 'Multi Family'
  */
 const mapPropertyType = (type) => {
   if (!type) return undefined;
@@ -410,8 +710,33 @@ const mapPropertyType = (type) => {
 
 /**
  * Get market statistics for a zip code
- * Endpoint: GET /markets
- */
+ * 
+ * Retrieves market-level rental statistics including average rents, median
+ * rents, rent growth, average prices, and days on market. Useful for market
+ * analysis and comparison. Endpoint: GET /markets
+ * 
+ * @memberof module:services/rentCastApi 
+ * @async
+ *@function
+
+@param {string} zipCode - ZIP code to analyze
+@returns {Promise<Object|null>} Market statistics or null if unavailable
+@returns {string} returns.zipCode - ZIP code
+@returns {number} returns.averageRent - Average monthly rent
+@returns {number} returns.medianRent - Median monthly rent
+@returns {number} returns.rentGrowth - Rent growth percentage
+@returns {number} returns.averagePrice - Average sale price
+@returns {number} returns.medianPrice - Median sale price
+@returns {number} returns.priceGrowth - Price growth percentage
+@returns {number} returns.daysOnMarket - Average days on market
+@returns {number} returns.totalListings - Total active listings
+@returns {string} returns.source - Always 'RentCast'
+
+@example
+const stats = await getMarketStats('33139');
+console.log(Average rent: $${stats.averageRent});
+console.log(Rent growth: ${stats.rentGrowth}%);
+*/
 export const getMarketStats = async (zipCode) => {
   try {
     if (!RENTCAST_API_KEY) {
@@ -457,6 +782,16 @@ export const getMarketStats = async (zipCode) => {
 // Legacy alias for backward compatibility
 export const getPropertyRentData = getCompletePropertyData;
 
+/**
+ * Default module export with all API functions
+ * 
+ * @type {Object}
+ * @property {Function} getRentEstimate - Get rent estimate only
+ * @property {Function} getPropertyDetails - Get property details with unit count
+ * @property {Function} getCompletePropertyData - Get complete data (MAIN FUNCTION)
+ * @property {Function} getPropertyRentData - Legacy alias
+ * @property {Function} getMarketStats - Get market statistics
+ */
 export default {
   getRentEstimate,
   getPropertyDetails,

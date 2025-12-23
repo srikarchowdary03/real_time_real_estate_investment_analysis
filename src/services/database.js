@@ -1,15 +1,23 @@
 /**
- * database.js - Firebase Database Service
+ * @file Firebase Firestore database service
+ * @module services/database
+ * @description Complete database service for managing saved properties in Firestore.
+ * Provides CRUD operations for user's saved property portfolio including saving,
+ * retrieving, updating, and deleting properties. Handles property data, rent
+ * estimates, analysis results, user notes, and tags.
  * 
- * COMPLETE VERSION with all exports needed by:
- * - propertycard.jsx
- * - ExpandedPropertyView.jsx
- * - useSavedProperties.js
- * - PropertyAnalysisPage.jsx
- * - Databasetest.jsx
- * - PropertyDetails.jsx
- * - MyProperties.jsx
+ * Document ID Pattern: {userId}_{propertyId}
+ * Collection: savedProperties
+ * 
+ * Used by: PropertyCard, ExpandedPropertyView, PropertyAnalysisPage, MyProperties,
+ * useSavedProperties hook, and PropertyDetails components.
+ * 
+ * @requires firebase/firestore
+ * @see {@link https://firebase.google.com/docs/firestore Firestore Documentation}
+ * 
+ * @version 1.0.0
  */
+
 import { 
   collection, 
   doc, 
@@ -31,6 +39,42 @@ const COLLECTION_NAME = 'savedProperties';
 
 /**
  * Save a property to user's favorites
+ * 
+ * Creates or updates a saved property document in Firestore. Extracts and
+ * normalizes property data from various possible formats (Realty API, enriched
+ * data, RentCast data). Handles thumbnail extraction, rent estimates, multi-family
+ * detection, and investment metrics.
+ * 
+ * Document structure includes: property data, thumbnails, photos, rent estimates,
+ * RentCast data, tax info, multi-family info, investment metrics, user notes/tags,
+ * and timestamps.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID (required)
+ * @param {Object} propertyData - Property data object (required)
+ * @param {string} propertyData.property_id - Unique property ID (required)
+ * @param {Object} [propertyData.location] - Location object with address
+ * @param {Object} [zillowData={}] - Enrichment data (RentCast, Zillow, etc.)
+ * @param {Object} [quickMetrics={}] - Investment metrics (score, cashflow, etc.)
+ * @returns {Promise<string>} Document ID ({userId}_{propertyId})
+ * @throws {Error} If userId is invalid or missing
+ * @throws {Error} If property_id is missing
+ * @throws {Error} If Firestore operation fails
+ * 
+ * @example
+ * await saveProperty(user.uid, property, rentCastData, metrics);
+ * // Saves to: savedProperties/{userId}_{propertyId}
+ * 
+ * @example
+ * // With full data
+ * await saveProperty(
+ *   'user123',
+ *   { property_id: 'M987654321', price: 250000, ... },
+ *   { rentEstimate: 2000, unitCount: 2, ... },
+ *   { score: 75, monthlyCashFlow: 450, capRate: 7.2 }
+ * );
  */
 export const saveProperty = async (userId, propertyData, zillowData = {}, quickMetrics = {}) => {
   try {
@@ -170,7 +214,22 @@ export const saveProperty = async (userId, propertyData, zillowData = {}, quickM
 };
 
 /**
- * Check if property is saved
+ * Check if property is saved by user
+ * 
+ * Checks if a property exists in user's saved collection. Used to show/hide
+ * save buttons and display saved state in UI.
+ * 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @returns {Promise<boolean>} True if property is saved, false otherwise
+ * 
+ * @example
+ * const saved = await isPropertySaved(user.uid, 'M123456789');
+ * if (saved) {
+ *   showSavedIndicator();
+ * }
  */
 export const isPropertySaved = async (userId, propertyId) => {
   try {
@@ -191,7 +250,23 @@ export const isPropertySaved = async (userId, propertyId) => {
 };
 
 /**
- * Remove property from saved
+ * Remove property from saved collection
+ * 
+ * Deletes a property from user's saved properties. Permanently removes
+ * the document from Firestore.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID to remove
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * @throws {Error} If Firestore delete fails
+ * 
+ * @example
+ * await unsaveProperty(user.uid, 'M123456789');
+ * console.log('Property removed from favorites');
  */
 export const unsaveProperty = async (userId, propertyId) => {
   try {
@@ -211,6 +286,29 @@ export const unsaveProperty = async (userId, propertyId) => {
 
 /**
  * Get all saved properties for user
+ * 
+ * Retrieves user's complete saved property portfolio ordered by most recently
+ * updated. Returns array of property documents including all data fields.
+ * Used by My Properties page to display user's saved listings.
+ * 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<Array<Object>>} Array of saved property objects
+ * @returns {string} returns[].id - Document ID
+ * @returns {string} returns[].propertyId - Property ID
+ * @returns {Object} returns[].propertyData - Property details
+ * @returns {string} returns[].thumbnail - Thumbnail URL
+ * @returns {number} returns[].rentEstimate - Rent estimate
+ * @returns {number} returns[].unitCount - Number of units
+ * @returns {number} returns[].quickScore - Investment score
+ * 
+ * @example
+ * const properties = await getSavedProperties(user.uid);
+ * console.log(`Found ${properties.length} saved properties`);
+ * properties.forEach(prop => {
+ *   console.log(prop.propertyData.address, prop.quickScore);
+ * });
  */
 export const getSavedProperties = async (userId) => {
   try {
@@ -241,6 +339,27 @@ export const getSavedProperties = async (userId) => {
 
 /**
  * Get a single saved property
+ * 
+ * Retrieves one specific saved property by property ID. Used when loading
+ * property details or analysis page to restore saved data.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @returns {Promise<Object|null>} Saved property object or null if not found
+ * @returns {string} returns.id - Document ID
+ * @returns {Object} returns.propertyData - Property details
+ * @returns {Object} returns.analysis - Saved analysis results
+ * @returns {string} returns.notes - User notes
+ * @returns {Array<string>} returns.tags - User tags
+ * 
+ * @example
+ * const saved = await getSavedProperty(user.uid, 'M123456789');
+ * if (saved?.analysis) {
+ *   loadPreviousAnalysis(saved.analysis);
+ * }
  */
 export const getSavedProperty = async (userId, propertyId) => {
   try {
@@ -265,7 +384,27 @@ export const getSavedProperty = async (userId, propertyId) => {
 };
 
 /**
- * Update a saved property (general)
+ * Update a saved property (general purpose)
+ * 
+ * Generic update function for modifying any fields in a saved property.
+ * Automatically adds updatedAt timestamp. Use specific update functions
+ * (updatePropertyWithRentData, updatePropertyAnalysis, etc.) when available.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} updates - Object with fields to update
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * @throws {Error} If Firestore update fails
+ * 
+ * @example
+ * await updateSavedProperty(user.uid, 'M123456789', {
+ *   notes: 'Need to visit this one',
+ *   tags: ['favorite', 'duplex']
+ * });
  */
 export const updateSavedProperty = async (userId, propertyId, updates) => {
   try {
@@ -285,6 +424,28 @@ export const updateSavedProperty = async (userId, propertyId, updates) => {
 
 /**
  * Update property with rent data from RentCast
+ * 
+ * Specialized update for adding/updating RentCast rental data. Updates rent
+ * estimates, unit count, multi-family status, and rent data source. Called
+ * when RentCast data is fetched for a saved property.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} rentData - RentCast data object
+ * @param {number} [rentData.totalMonthlyRent] - Total monthly rent
+ * @param {number} [rentData.rentEstimate] - Per-unit rent estimate
+ * @param {number} [rentData.rentRangeLow] - Low end of range
+ * @param {number} [rentData.rentRangeHigh] - High end of range
+ * @param {number} [rentData.unitCount] - Number of units
+ * @param {boolean} [rentData.isMultiFamily] - Multi-family flag
+ * @returns {Promise<boolean>} True if update succeeded
+ * 
+ * @example
+ * const rentData = await getRentEstimate(property);
+ * await updatePropertyWithRentData(user.uid, propertyId, rentData);
  */
 export const updatePropertyWithRentData = async (userId, propertyId, rentData) => {
   try {
@@ -321,6 +482,28 @@ export const updatePropertyWithRentData = async (userId, propertyId, rentData) =
 
 /**
  * Update property analysis/metrics
+ * 
+ * Saves complete investment analysis results to property document. Called
+ * when user completes property analysis on PropertyAnalysisPage. Stores
+ * full analysis object plus extracted key metrics for quick display.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Object} analysis - Complete analysis object from calculator
+ * @param {number} [analysis.score] - Investment score (0-100)
+ * @param {number} [analysis.monthlyCashFlow] - Monthly cash flow
+ * @param {number} [analysis.capRate] - Cap rate percentage
+ * @param {Object} [analysis.quickAnalysis] - All investment ratios
+ * @param {Object} [analysis.cashflow] - Cash flow details
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * const analysis = calculator.getCompleteAnalysis();
+ * await updatePropertyAnalysis(user.uid, propertyId, analysis);
  */
 export const updatePropertyAnalysis = async (userId, propertyId, analysis) => {
   try {
@@ -350,6 +533,23 @@ export const updatePropertyAnalysis = async (userId, propertyId, analysis) => {
 
 /**
  * Update property notes
+ * 
+ * Updates user's personal notes for a property. Notes are freeform text
+ * stored per property for user's reference.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {string} notes - Notes text
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyNotes(user.uid, propertyId, 
+ *   'Great location near schools. Needs new roof.'
+ * );
  */
 export const updatePropertyNotes = async (userId, propertyId, notes) => {
   try {
@@ -373,6 +573,23 @@ export const updatePropertyNotes = async (userId, propertyId, notes) => {
 
 /**
  * Update property tags
+ * 
+ * Updates user's custom tags for organizing properties. Tags are array of
+ * strings for categorization (e.g., ['favorite', 'duplex', 'needs-work']).
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {Array<string>} tags - Array of tag strings
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyTags(user.uid, propertyId, 
+ *   ['favorite', 'multi-family', 'high-roi']
+ * );
  */
 export const updatePropertyTags = async (userId, propertyId, tags) => {
   try {
@@ -395,7 +612,27 @@ export const updatePropertyTags = async (userId, propertyId, tags) => {
 };
 
 /**
- * Update property thumbnail (for fixing missing thumbnails)
+ * Update property thumbnail
+ * 
+ * Updates thumbnail URL for a property. Used to fix missing thumbnails or
+ * upgrade to higher quality images. Thumbnail is critical for My Properties
+ * page display.
+ * 
+ * @memberof module:services/database 
+ * @async
+ * @function
+ * @param {string} userId - Firebase user ID
+ * @param {string} propertyId - Property ID
+ * @param {string} thumbnailUrl - New thumbnail URL
+ * @returns {Promise<void>}
+ * @throws {Error} If userId or propertyId is invalid
+ * 
+ * @example
+ * await updatePropertyThumbnail(
+ *   user.uid, 
+ *   propertyId, 
+ *   'https://example.com/property-thumb.jpg'
+ * );
  */
 export const updatePropertyThumbnail = async (userId, propertyId, thumbnailUrl) => {
   try {
@@ -416,7 +653,23 @@ export const updatePropertyThumbnail = async (userId, propertyId, thumbnailUrl) 
     throw error;
   }
 };
-
+/**
+ * Default module export with all database functions
+ * 
+ * @memberof module:services/database 
+ * @type {Object}
+ * @property {Function} saveProperty - Save property to collection
+ * @property {Function} isPropertySaved - Check if property is saved
+ * @property {Function} unsaveProperty - Remove property from collection
+ * @property {Function} getSavedProperties - Get all user's saved properties
+ * @property {Function} getSavedProperty - Get single saved property
+ * @property {Function} updateSavedProperty - Generic update function
+ * @property {Function} updatePropertyWithRentData - Update with RentCast data
+ * @property {Function} updatePropertyAnalysis - Update with analysis results
+ * @property {Function} updatePropertyNotes - Update user notes
+ * @property {Function} updatePropertyTags - Update user tags
+ * @property {Function} updatePropertyThumbnail - Update thumbnail URL
+ */
 export default {
   saveProperty,
   isPropertySaved,

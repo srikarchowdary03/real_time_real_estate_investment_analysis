@@ -1,4 +1,76 @@
+/**
+ * @file Buy and Hold projections component
+ * @module components/analysis/BuyHoldProjections
+ * @description 30-year investment projection analysis for buy-and-hold rental properties.
+ * Calculates year-by-year projections for rental income, expenses, cash flow, equity,
+ * property value appreciation, loan amortization, tax benefits, and investment returns.
+ * 
+ * Projection Components:
+ * - Rental Income: Gross rents, vacancy, operating income
+ * - Operating Expenses: Taxes, insurance, management, maintenance, CapEx
+ * - Cash Flow: NOI, debt service, pre-tax and post-tax cash flow
+ * - Tax Benefits: Deductions (expenses, interest, depreciation)
+ * - Equity Accumulation: Property value, loan balance, total equity
+ * - Sale Analysis: Proceeds, cumulative cash flow, total profit
+ * - Investment Returns: Cap Rate, CoC, ROE, ROI, IRR
+ * - Financial Ratios: Rent-to-value, GRM, DCR, Break-even, Debt yield, Equity multiple
+ * 
+ * Calculations Include:
+ * - Annual property appreciation
+ * - Rental income growth
+ * - Operating expense inflation
+ * - Monthly loan amortization
+ * - 27.5-year straight-line depreciation
+ * - Tax deductions and savings
+ * - Cumulative cash flows
+ * - Sale proceeds with selling costs
+ * - IRR (Internal Rate of Return)
+ * 
+ * @requires react
+ * @requires ../../utils/investmentCalculations
+ * 
+ * @version 1.0.0
+ */
 import { useState } from 'react';
+
+/**
+ * Simple SVG Line Chart Component
+ * 
+ * Fallback chart component for visualizing projections without external libraries.
+ * Renders SVG line chart with multiple datasets, grid lines, axes, and legend.
+ * 
+ * Features:
+ * - Auto-scales to data range
+ * - Multiple dataset support (different colored lines)
+ * - Grid lines and value labels
+ * - X-axis labels (every 5 years)
+ * - Interactive legend
+ * 
+ * @async
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.data - Chart data object
+ * @param {Array<string>} props.data.labels - X-axis labels (year names)
+ * @param {Array<Object>} props.data.datasets - Array of data series
+ * @param {string} props.data.datasets[].label - Series label
+ * @param {Array<number>} props.data.datasets[].data - Y values
+ * @param {string} props.data.datasets[].borderColor - Line color
+ * @param {string} props.title - Chart title
+ * @returns {React.ReactElement} SVG line chart
+ * 
+ * @example
+ * <SimpleLineChart
+ *   data={{
+ *     labels: ['Year 1', 'Year 2', 'Year 3'],
+ *     datasets: [{
+ *       label: 'Cash Flow',
+ *       data: [5000, 5500, 6000],
+ *       borderColor: '#10b981'
+ *     }]
+ *   }}
+ *   title="Cash Flow Over Time"
+ * />
+ */
 
 // Simple SVG Line Chart Component (fallback until Chart.js is installed)
 const SimpleLineChart = ({ data, title }) => {
@@ -15,11 +87,20 @@ const SimpleLineChart = ({ data, title }) => {
   const height = 300;
   const padding = 40;
   
-  // Scale point to SVG coordinates
+    /**
+   * Scale Y value to SVG coordinates
+   * @param {number} value - Data value
+   * @returns {number} SVG Y coordinate
+   */
   const scaleY = (value) => {
     return height - padding - ((value - minValue) / range) * (height - 2 * padding);
   };
   
+    /**
+   * Scale X index to SVG coordinates
+   * @param {number} index - Data point index
+   * @returns {number} SVG X coordinate
+   */
   const scaleX = (index) => {
     return padding + (index / (labels.length - 1)) * (width - 2 * padding);
   };
@@ -115,8 +196,65 @@ const SimpleLineChart = ({ data, title }) => {
   );
 };
 
+/**
+ * Buy & Hold Projections Component
+ * 
+ * Displays comprehensive 30-year projections for rental property investment.
+ * Shows selected years (1, 2, 3, 5, 10, 20, 30) in tabular format with
+ * charts for cash flow and equity over time.
+ * 
+ * PROJECTION METHODOLOGY:
+ * - Property appreciates annually at specified rate
+ * - Rental income grows annually
+ * - Operating expenses inflate annually
+ * - Loan amortizes monthly (principal + interest)
+ * - Depreciation: 27.5-year straight-line (85% of value)
+ * - Tax benefits: Deductions × 25% tax rate (simplified)
+ * - Sale proceeds: Value - Loan - Selling costs
+ * - IRR: Internal rate of return calculation
+ * 
+ * SECTIONS DISPLAYED:
+ * 1. Projection Settings (top cards)
+ * 2. Rental Income table
+ * 3. Operating Expenses table
+ * 4. Cash Flow table
+ * 5. Tax Benefits & Deductions table
+ * 6. Equity Accumulation table
+ * 7. Sale Analysis table
+ * 8. Investment Returns table
+ * 9. Financial Ratios table
+ * 10. Charts: Cash Flow Over Time, Equity Over Time
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data
+ * @param {Object} props.inputs - Calculation inputs
+ * @param {number} props.inputs.appreciationRate - Annual appreciation %
+ * @param {number} props.inputs.incomeGrowthRate - Annual rent growth %
+ * @param {number} props.inputs.expenseGrowthRate - Annual expense inflation %
+ * @param {number} props.inputs.sellingCosts - Selling costs %
+ * @param {Object} props.results - Analysis results from BuyRentHoldCalculator
+ * @returns {React.ReactElement} 30-year projections display
+ * 
+ * @example
+ * <BuyHoldProjections
+ *   property={propertyData}
+ *   inputs={calculationInputs}
+ *   results={analysisResults}
+ * />
+ */
 export default function BuyHoldProjections({ property, inputs, results }) {
+   /**
+   * Selected years to display in tables
+   * Shows key milestones: 1, 2, 3, 5, 10, 20, 30
+   */
   const [selectedYears] = useState([1, 2, 3, 5, 10, 20, 30]);
+    /**
+   * Format number as USD currency
+   * @function
+   * @param {number} value - Dollar amount
+   * @returns {string} Formatted currency
+   */
 
   const formatCurrency = (value) => {
     if (value === null || value === undefined || isNaN(value)) return '$0';
@@ -128,12 +266,22 @@ export default function BuyHoldProjections({ property, inputs, results }) {
     }).format(value);
   };
 
+    /**
+   * Format number as percentage
+   * @function
+   * @param {number} value - Percentage value
+   * @returns {string} Formatted percentage
+   */
   const formatPercent = (value) => {
     if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
 
   // Safety check for results
+    /**
+   * Safety check for results
+   * Returns loading state if results not ready
+   */
   if (!results || !results.propertyInfo || !results.financing) {
     return (
       <div className="max-w-7xl mx-auto p-6">
@@ -145,7 +293,57 @@ export default function BuyHoldProjections({ property, inputs, results }) {
     );
   }
 
-  // Calculate projections for 30 years
+   /**
+   * Calculate 30-year projections
+   * 
+   * COMPREHENSIVE PROJECTION ALGORITHM:
+   * 
+   * For each year (1-30):
+   * 1. Property Value: Previous value × (1 + appreciation rate)
+   * 2. Gross Rents: Starting rent × (1 + income growth)^(year-1)
+   * 3. Vacancy Loss: Gross rent × vacancy rate
+   * 4. Operating Income: Gross rent - vacancy
+   * 5. Operating Expenses: Each expense × (1 + expense growth)^(year-1)
+   * 6. NOI: Operating income - operating expenses
+   * 7. Loan Payments: Monthly payment × 12
+   * 8. Cash Flow: NOI - loan payments
+   * 9. Loan Amortization: Month-by-month principal/interest split
+   * 10. Tax Benefits: Depreciation + deductions × tax rate
+   * 11. Post-Tax Cash Flow: Cash flow + tax savings
+   * 12. Equity: Property value - loan balance
+   * 13. Sale Proceeds: Equity - selling costs
+   * 14. Investment Metrics: Cap rate, CoC, ROE, ROI, IRR
+   * 15. Financial Ratios: Rent-to-value, GRM, DCR, etc.
+   * 
+   * @function
+   * @returns {Array<Object>} Array of 30 yearly projection objects
+   * @returns {number} returns[].year - Year number (1-30)
+   * @returns {number} returns[].propertyValue - Property value
+   * @returns {number} returns[].grossRents - Annual gross rents
+   * @returns {number} returns[].operatingExpenses - Annual operating expenses
+   * @returns {number} returns[].noi - Net Operating Income
+   * @returns {number} returns[].cashFlow - Annual cash flow
+   * @returns {number} returns[].loanBalance - Remaining loan balance
+   * @returns {number} returns[].totalEquity - Equity position
+   * @returns {number} returns[].saleProceeds - Proceeds if sold this year
+   * @returns {number} returns[].cumulativeCashFlow - Total cash flow to date
+   * @returns {number} returns[].totalProfit - Total profit if sold this year
+   * @returns {number} returns[].capRatePurchase - Cap rate on purchase price
+   * @returns {number} returns[].cashOnCash - Cash-on-Cash return %
+   * @returns {number} returns[].irr - Internal Rate of Return %
+   * 
+   * @example
+   * const projections = calculateProjections();
+   * console.log(projections[4]); // Year 5 data
+   * // {
+   * //   year: 5,
+   * //   propertyValue: 289543,
+   * //   cashFlow: 6234,
+   * //   totalEquity: 94231,
+   * //   capRatePurchase: 7.2,
+   * //   ...
+   * // }
+   */
   const calculateProjections = () => {
     const projections = [];
     const appreciationRate = (inputs.appreciationRate || 3) / 100;
@@ -284,9 +482,16 @@ export default function BuyHoldProjections({ property, inputs, results }) {
     return projections;
   };
 
+    /**
+   * 30-year projection data
+   */
   const projections = calculateProjections();
 
-  // Prepare chart data for Cash Flow Over Time
+   /**
+   * Cash flow chart data
+   * Shows operating income, expenses, and net cash flow over 30 years
+   * @type {Object}
+   */
   const cashFlowChartData = {
     labels: projections.map(p => `Year ${p.year}`),
     datasets: [
@@ -311,7 +516,11 @@ export default function BuyHoldProjections({ property, inputs, results }) {
     ],
   };
 
-  // Prepare chart data for Equity Over Time
+    /**
+   * Equity chart data
+   * Shows property value, loan balance, and total equity over 30 years
+   * @type {Object}
+   */
   const equityChartData = {
     labels: projections.map(p => `Year ${p.year}`),
     datasets: [
