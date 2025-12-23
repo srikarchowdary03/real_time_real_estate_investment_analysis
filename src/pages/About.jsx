@@ -28,7 +28,7 @@ const About = () => {
     },
     {
       icon: PieChart,
-      title: '5-Year Projections',
+      title: '30-Year Projections',
       description: 'Model property appreciation, equity growth, and cash flow over your holding period.'
     },
     {

@@ -1,3 +1,26 @@
+/**
+ * @file Property card component for grid display
+ * @module components/features/PropertyCard
+ * @description Displays property information in a card format with image, price, details,
+ * and investment metrics. Includes save functionality, hover effects, quick scoring,
+ * and formula-based rent estimation. No external API calls per card for performance.
+ * 
+ * Features:
+ * - Formula-based rent estimation (no API calls per card)
+ * - Quick investment scoring (0-100)
+ * - Multi-family property detection
+ * - Save/unsave functionality with Firebase
+ * - Hover effects with expanded metrics
+ * - Image error handling with fallback
+ * 
+ * @requires react
+ * @requires react-router-dom
+ * @requires lucide-react
+ * @requires ../../services/database
+ * @requires ../../hooks/useAuth
+ * 
+ * @version 1.0.0
+ */
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bed, Bath, Square, MapPin, TrendingUp, Heart, Building2 } from 'lucide-react';
@@ -5,11 +28,49 @@ import { saveProperty, unsaveProperty, isPropertySaved } from '../../services/da
 import { useAuth } from '../../hooks/useAuth';
 
 /**
- * PropertyCard Component
+ * Property Card Component
  * 
- * FIXED: No Firebase calls without auth check
+ * Displays a property listing in card format with image, price, details, and
+ * investment metrics. Optimized for performance by avoiding per-card API calls.
+ * Uses formula-based rent estimation instead of calling RentCast for every card.
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - No Firebase calls without authentication check
  * - Only calls isPropertySaved if user is logged in
- * - No getInvestorProfile calls per card (profile loaded once at app level)
+ * - Formula-based rent estimation (no RentCast API per card)
+ * - Memoized calculations for metrics
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data object from Realty API
+ * @param {string} props.property.property_id - Unique property identifier
+ * @param {number} [props.property.list_price] - Property list price
+ * @param {Object} [props.property.location] - Location object with address
+ * @param {Object} [props.property.description] - Property description (beds, baths, sqft)
+ * @param {string} [props.property.thumbnail] - Thumbnail image URL
+ * @param {boolean} [props.isSelected=false] - Whether card is selected
+ * @param {Function} [props.onHover] - Callback when card is hovered
+ * @param {boolean} [props.isExpanded=false] - Whether expanded view is open
+ * @param {Function} [props.onExpand] - Callback to open expanded view
+ * @param {Object} [props.rentData=null] - Optional pre-loaded rent data from RentCast
+ * @param {number} [props.rentData.totalMonthlyRent] - Total monthly rent
+ * @param {number} [props.rentData.rentEstimate] - Per-unit rent estimate
+ * @returns {React.ReactElement} Property card component
+ * 
+ * @example
+ * <PropertyCard 
+ *   property={propertyData}
+ *   onExpand={() => setExpandedProperty(propertyData)}
+ *   onHover={() => console.log('Hovered')}
+ * />
+ * 
+ * @example
+ * // With pre-loaded rent data
+ * <PropertyCard 
+ *   property={propertyData}
+ *   rentData={{ totalMonthlyRent: 2000, rentEstimate: 2000 }}
+ *   isSelected={selectedId === propertyData.property_id}
+ * />
  */
 const PropertyCard = ({ 
   property, 
@@ -22,31 +83,105 @@ const PropertyCard = ({
 }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+    /**
+   * Image error state for fallback handling
+   */
   const [imageError, setImageError] = useState(false);
+    /**
+   * Hover state for showing additional metrics
+   */
   const [isHovered, setIsHovered] = useState(false);
+    /**
+   * Property saved state from Firebase
+   */
   const [isSaved, setIsSaved] = useState(false);
+    /**
+   * Saving operation in progress flag
+   */
   const [saving, setSaving] = useState(false);
 
-  // Extract property data with fallbacks
+   /**
+   * Extract property address with fallbacks
+   * Tries multiple possible property data formats
+   * @type {string}
+   */
   const address = property.location?.address?.line || property.address || 'Address not available';
+    /**
+   * Extract city name with fallbacks
+   * @type {string}
+   */
   const city = property.location?.address?.city || property.city || '';
+    /**
+   * Extract state code with fallbacks
+   * @type {string}
+   */
   const state = property.location?.address?.state_code || property.state || '';
+    /**
+   * Extract ZIP code with fallbacks
+   * @type {string}
+   */
   const zipCode = property.location?.address?.postal_code || property.zip || '';
+    /**
+   * Extract price with fallbacks
+   * @type {number}
+   */
   const price = property.list_price || property.price || 0;
+    /**
+   * Extract number of bedrooms with fallbacks
+   * @type {number}
+   */
   const beds = property.description?.beds || property.beds || 0;
+    /**
+   * Extract number of bathrooms with fallbacks
+   * @type {number}
+   */
   const baths = property.description?.baths || property.baths || 0;
+    /**
+   * Extract square footage with fallbacks
+   * @type {number}
+   */
   const sqft = property.description?.sqft || property.sqft || 0;
+    /**
+   * Extract property type with fallbacks
+   * @type {string}
+   */
   const propertyType = property.description?.type || property.propertyType || '';
 
   // Detect multi-family from property type
+    /**
+   * Detect if property is multi-family
+   * 
+   * Checks property type string for multi-family keywords including
+   * multi-family, duplex, triplex, fourplex, and apartment.
+   * 
+   * @type {boolean}
+   * @memoized
+   */
   const isMultiFamily = useMemo(() => {
-    const type = propertyType.toLowerCase();
-    return type.includes('multi') || type.includes('duplex') || 
-           type.includes('triplex') || type.includes('fourplex') ||
-           type.includes('apartment');
-  }, [propertyType]);
+  // Priority 1: Use rentData if available
+  if (rentData?.unitCount > 1) return true;
+  if (rentData?.isMultiFamily) return true;
+  
+  // Priority 2: Fall back to type detection
+  const type = propertyType.toLowerCase();
+  return type.includes('multi') || type.includes('duplex') || 
+         type.includes('triplex') || type.includes('fourplex') ||
+         type.includes('apartment');
+}, [propertyType, rentData]);
 
-  // Get the best available image
+const unitCount = rentData?.unitCount || (isMultiFamily ? 2 : 1);
+
+   /**
+   * Get best available image URL
+   * 
+   * Tries multiple possible image sources in priority order.
+   * Falls back to placeholder if all sources fail or imageError is true.
+   * 
+   * Priority: primaryPhoto > thumbnail > primary_photo.href > photos[0] > placeholder
+   * 
+   * @type {string}
+   * @memoized
+   */
   const imageUrl = useMemo(() => {
     if (imageError) return 'https://placehold.co/640x480/e2e8f0/64748b?text=No+Image';
     
@@ -58,6 +193,29 @@ const PropertyCard = ({
   }, [property, imageError]);
 
   // ===== FORMULA-BASED RENT ESTIMATE (No API) =====
+   /**
+   * Estimate monthly rent using formula-based calculation
+   * 
+   * PERFORMANCE: No API calls per card - uses price-to-rent ratio formulas
+   * 
+   * Algorithm:
+   * 1. Base rent multiplier varies by price range (higher prices = lower ratio)
+   * 2. Bedroom adjustments (+15% for 4+ beds, +8% for 3 beds, -15% for studios)
+   * 3. Square footage adjustments (+8% for 2500+ sqft, -8% for <1000 sqft)
+   * 4. Rounds to nearest $50 for realistic estimates
+   * 
+   * Uses passed rentData if available (from RentCast API), otherwise calculates.
+   * 
+   * @type {number}
+   * @memoized
+   * @returns {number} Estimated monthly rent in dollars
+   * 
+   * @example
+   * // $250,000 property, 3 bed, 1500 sqft
+   * // Base: 250000 * 0.008 = 2000
+   * // Beds: 2000 * 1.08 = 2160
+   * // Result: ~2150 (rounded to $50)
+   */
   const estimateRent = useMemo(() => {
     // If we have rent data passed in, use that
     if (rentData?.totalMonthlyRent) return rentData.totalMonthlyRent;
@@ -89,7 +247,50 @@ const PropertyCard = ({
     return Math.round(estimate / 50) * 50;
   }, [price, beds, sqft, rentData]);
 
-  // ===== QUICK INVESTMENT METRICS =====
+
+  /**
+   * Calculate quick investment metrics
+   * 
+   * Computes simplified investment metrics for quick property comparison:
+   * - Gross Yield: Annual rent / Purchase price
+   * - Monthly Cash Flow: Estimated profit after all expenses
+   * - Cap Rate: Simplified NOI / Purchase price
+   * - Investment Score: 0-100 score based on multiple factors
+   * 
+   * SCORING ALGORITHM (0-100):
+   * Base: 50 points
+   * - Price per sqft: +15 to -10 points
+   * - Gross yield: +15 to -10 points
+   * - Bedroom value ratio: +10 to -10 points
+   * - Price sweet spot: +5 to -5 points
+   * 
+   * Score ranges:
+   * - 80-100: Excellent (emerald)
+   * - 65-79: Good (green)
+   * - 50-64: Fair (yellow)
+   * - 35-49: Risky (orange)
+   * - 0-34: Poor (red)
+   * 
+   * @type {Object|null}
+   * @memoized
+   * @property {number} grossYield - Gross yield percentage
+   * @property {number} capRate - Capitalization rate percentage
+   * @property {number} monthlyCashFlow - Monthly cash flow in dollars
+   * @property {number} score - Investment score 0-100
+   * @property {string} label - Score label (Excellent/Good/Fair/Risky/Poor)
+   * @property {string} color - Color code (emerald/green/yellow/orange/red)
+   * 
+   * @example
+   * // Returns:
+   * {
+   *   grossYield: 8.5,
+   *   capRate: 6.2,
+   *   monthlyCashFlow: 450,
+   *   score: 72,
+   *   label: 'Good',
+   *   color: 'green'
+   * }
+   */
   const quickMetrics = useMemo(() => {
     if (!price || !estimateRent) return null;
 
@@ -154,7 +355,21 @@ const PropertyCard = ({
     };
   }, [price, estimateRent, beds, sqft]);
 
-  // ===== CHECK IF SAVED - ONLY IF LOGGED IN =====
+
+   /**
+   * Check if property is saved by current user
+   * 
+   * CRITICAL PERFORMANCE FIX: Only checks if user is logged in to avoid
+   * unnecessary Firebase calls and permission errors.
+   * 
+   * Runs when:
+   * - Component mounts
+   * - User authentication state changes
+   * - Property ID changes
+   * 
+   * @listens currentUser.uid
+   * @listens property.property_id
+   */
   useEffect(() => {
     const checkSaved = async () => {
       // CRITICAL: Only check if user is actually logged in
@@ -175,7 +390,18 @@ const PropertyCard = ({
     checkSaved();
   }, [currentUser?.uid, property.property_id]);
 
-  // Format functions
+
+    /**
+   * Format price as USD currency
+   * 
+   * @function
+   * @param {number} value - Price value in dollars
+   * @returns {string} Formatted price string (e.g., "$250,000")
+   * 
+   * @example
+   * formatPrice(250000); // "$250,000"
+   * formatPrice(null);   // "N/A"
+   */
   const formatPrice = (value) => {
     if (!value) return 'N/A';
     return new Intl.NumberFormat('en-US', {
@@ -186,7 +412,15 @@ const PropertyCard = ({
     }).format(value);
   };
 
-  // Handle card click - open expanded view
+    /**
+   * Handle card click event
+   * 
+   * Opens expanded property view when card is clicked.
+   * Prevents event propagation to avoid triggering parent handlers.
+   * 
+   * @function
+   * @param {React.MouseEvent} e - Click event
+   */
   const handleCardClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -195,18 +429,52 @@ const PropertyCard = ({
     }
   };
 
-  // Handle mouse enter
+    /**
+   * Handle mouse enter event
+   * 
+   * Sets hover state and triggers onHover callback.
+   * Shows additional metrics when hovering.
+   * 
+   * @function
+   */
   const handleMouseEnter = () => {
     setIsHovered(true);
     if (onHover) onHover();
   };
 
-  // Handle mouse leave
+  /**
+   * Handle mouse leave event
+   * 
+   * Clears hover state and hides additional metrics.
+   * 
+   * @function
+   */
   const handleMouseLeave = () => {
     setIsHovered(false);
   };
 
-  // Handle save
+   /**
+   * Handle save/unsave button click
+   * 
+   * Toggles property saved status in Firebase. Redirects to sign-in
+   * if user is not authenticated. Shows visual feedback during save operation.
+   * 
+   * Process:
+   * 1. Check if user is logged in (redirect if not)
+   * 2. Set saving state (disable button)
+   * 3. Call saveProperty or unsaveProperty
+   * 4. Update local isSaved state
+   * 5. Clear saving state
+   * 
+   * @async
+   * @function
+   * @param {React.MouseEvent} e - Click event
+   * 
+   * @example
+   * // User clicks save button
+   * // -> Saves to Firebase: savedProperties/{userId}_{propertyId}
+   * // -> Updates UI to show filled heart icon
+   */
   const handleSaveClick = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -252,7 +520,19 @@ const PropertyCard = ({
     }
   };
 
-  // Score badge colors
+    /**
+   * Get Tailwind CSS classes for score badge
+   * 
+   * Maps color names to Tailwind background and text color classes.
+   * 
+   * @function
+   * @param {string} color - Color name (emerald/green/yellow/orange/red/gray)
+   * @returns {string} Tailwind CSS classes
+   * 
+   * @example
+   * getScoreColors('emerald'); // 'bg-emerald-500 text-white'
+   * getScoreColors('red');     // 'bg-red-500 text-white'
+   */
   const getScoreColors = (color) => {
     const colors = {
       emerald: 'bg-emerald-500 text-white',
@@ -347,6 +627,13 @@ const PropertyCard = ({
             <Square className="w-4 h-4" /> {sqft.toLocaleString()}
           </span>
         </div>
+        {/* Multi-family badge */}
+        {isMultiFamily && (
+          <div className="absolute top-3 right-12 px-2 py-1 rounded-lg bg-purple-600 text-white text-xs font-medium flex items-center gap-1">
+            <Building2 className="w-3 h-3" />
+            {unitCount} Units
+          </div>
+        )}
 
         {/* Address */}
         <p className="text-sm text-gray-600 flex items-center gap-1 truncate">

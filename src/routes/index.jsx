@@ -15,7 +15,6 @@ import SignIn from '../pages/Auth/SignIn';
 import InvestorProfile from '../pages/InvestorProfile';
 import Dashboard from '../pages/Dashboard';
 import Profile from '../pages/Profile';
-import Settings from '../pages/Settings';
 
 /**
  * Application Router Configuration
@@ -88,12 +87,6 @@ const router = createBrowserRouter([
       {
         path: 'profile',
         element: <Profile />,
-      },
-      
-      // Settings
-      {
-        path: 'settings',
-        element: <Settings />,
       },
       
       // Authentication

@@ -1,5 +1,43 @@
-// src/components/features/PropertyMap.jsx
-// Color-coded markers - Boundary filters properties in BOTH map and grid
+/**
+ * @file Interactive property map with boundary filtering
+ * @module components/features/PropertyMap
+ * @description Mapbox GL map component with color-coded property markers based on investment
+ * scores. Includes boundary drawing/editing for geographic filtering, property popups with
+ * quick metrics, and integration with property grid filtering.
+ * 
+ * Key Features:
+ * - Investment score-based marker coloring (0-100 scale)
+ * - Boundary drawing tool (polygon selection)
+ * - Boundary filtering (affects both map and grid display)
+ * - Property popups with quick investment metrics
+ * - Responsive marker sizing based on selection
+ * - Map controls (navigation, fullscreen, geolocation, scale)
+ * 
+ * Investment Scoring Algorithm:
+ * Base: 50 points
+ * - Price per sqft: +20 to -15 points
+ * - Bedroom value ratio: +15 to -10 points
+ * - Rent potential/gross yield: +15 to -10 points
+ * - Property size bonus: +5 to -5 points
+ * - Multi-unit bonus: +15 points
+ * - Property age: +5 to -10 points
+ * - Price range sweet spot: +5 to -5 points
+ * 
+ * Score Colors:
+ * - 80-100: Green (#10B981) - Excellent
+ * - 65-79: Light Green (#22C55E) - Good
+ * - 50-64: Yellow (#EAB308) - Fair
+ * - 35-49: Orange (#F97316) - Risky
+ * - 0-34: Red (#EF4444) - Poor
+ * 
+ * @requires react
+ * @requires react-map-gl
+ * @requires @mapbox/mapbox-gl-draw
+ * @requires mapbox-gl
+ * @requires ../../utils/boundaryHelpers
+ * 
+ * @version 1.0.0
+ */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Map, { Marker, Popup, NavigationControl, FullscreenControl, GeolocateControl, ScaleControl } from 'react-map-gl';
@@ -8,10 +46,56 @@ import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { filterPropertiesInBoundary } from '../../utils/boundaryHelpers';
 
+/**
+ * Mapbox access token from environment variables
+ * @constant {string}
+ * @private
+ */
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 // ===== INVESTMENT SCORE CALCULATION =====
-// Score based on actual property characteristics that vary
+/**
+ * Calculate investment score based on property characteristics
+ * 
+ * Comprehensive scoring algorithm that evaluates investment potential using
+ * multiple property metrics. Score ranges from 0-100 with higher being better.
+ * 
+ * SCORING COMPONENTS:
+ * 1. Price per sqft (20 points max) - Lower is better
+ * 2. Bedroom value ratio (15 points max) - More beds per $100k is better
+ * 3. Rent potential/gross yield (15 points max) - Higher yield is better
+ * 4. Property size (5 points max) - Larger properties score bonus
+ * 5. Multi-unit bonus (15 points) - Multi-family properties highly valued
+ * 6. Property age (5 points max) - Newer properties score higher
+ * 7. Price range sweet spot (5 points max) - Mid-range prices optimal
+ * 
+ * @function
+ * @param {Object} property - Property data object
+ * @param {number} [property.list_price] - List price
+ * @param {number} [property.price] - Alternate price field
+ * @param {Object} [property.description] - Property description
+ * @param {number} [property.description.beds] - Number of bedrooms
+ * @param {number} [property.description.baths] - Number of bathrooms
+ * @param {number} [property.description.sqft] - Square footage
+ * @param {number} [property.description.year_built] - Year built
+ * @param {string} [property.description.type] - Property type
+ * @returns {number} Investment score (0-100)
+ * 
+ * @example
+ * const score = calculateInvestmentScore({
+ *   price: 250000,
+ *   description: { beds: 3, baths: 2, sqft: 1500, type: 'Duplex' }
+ * });
+ * console.log(score); // 82 (Excellent investment)
+ * 
+ * @example
+ * // Poor investment (overpriced, few beds)
+ * const score = calculateInvestmentScore({
+ *   price: 500000,
+ *   description: { beds: 2, sqft: 1200, type: 'Condo' }
+ * });
+ * console.log(score); // 28 (Poor investment)
+ */
 const calculateInvestmentScore = (property) => {
   const price = property.list_price || property.price || 0;
   const beds = property.description?.beds || property.beds || 0;
@@ -114,6 +198,20 @@ const calculateInvestmentScore = (property) => {
 };
 
 // ===== SCORE-BASED COLORS =====
+/**
+ * Get marker color based on investment score
+ * 
+ * Maps score to hex color for visual representation on map.
+ * 
+ * @function
+ * @param {number} score - Investment score (0-100)
+ * @returns {string} Hex color code
+ * 
+ * @example
+ * getScoreColor(85);  // '#10B981' (green - excellent)
+ * getScoreColor(55);  // '#EAB308' (yellow - fair)
+ * getScoreColor(25);  // '#EF4444' (red - poor)
+ */
 const getScoreColor = (score) => {
   if (score >= 80) return '#10B981';
   if (score >= 65) return '#22C55E';
@@ -122,6 +220,17 @@ const getScoreColor = (score) => {
   return '#EF4444';
 };
 
+/**
+ * Get score label text
+ * 
+ * @function
+ * @param {number} score - Investment score (0-100)
+ * @returns {string} Score label
+ * 
+ * @example
+ * getScoreLabel(85); // 'Excellent'
+ * getScoreLabel(55); // 'Fair'
+ */
 const getScoreLabel = (score) => {
   if (score >= 80) return 'Excellent';
   if (score >= 65) return 'Good';
@@ -131,8 +240,40 @@ const getScoreLabel = (score) => {
 };
 
 // ===== CUSTOM MARKER COMPONENT =====
+/**
+ * Custom Property Marker Component
+ * 
+ * Renders teardrop-shaped marker with investment score displayed inside.
+ * Marker size and styling changes based on selection state.
+ * 
+ * Shape: Teardrop (circle with pointed bottom) using CSS transform
+ * Color: Based on investment score (see getScoreColor)
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data
+ * @param {Function} props.onClick - Click handler
+ * @param {boolean} props.isSelected - Whether marker is selected
+ * @returns {React.ReactElement} Marker component
+ * 
+ * @example
+ * <PropertyMarker
+ *   property={propertyData}
+ *   onClick={() => handleClick(property)}
+ *   isSelected={selectedId === property.property_id}
+ * />
+ */
 const PropertyMarker = ({ property, onClick, isSelected }) => {
+   /**
+   * Calculate investment score for this property
+   * Memoized to prevent recalculation on every render
+   * @type {number}
+   */
   const score = useMemo(() => calculateInvestmentScore(property), [property]);
+    /**
+   * Marker color based on score
+   * @type {string}
+   */
   const color = getScoreColor(score);
   
   return (
@@ -171,6 +312,43 @@ const PropertyMarker = ({ property, onClick, isSelected }) => {
   );
 };
 
+/**
+ * Property Map Main Component
+ * 
+ * Interactive Mapbox map with property markers, boundary drawing, and filtering.
+ * Manages map state, draw controls, boundary filtering, and property selection.
+ * 
+ * BOUNDARY FILTERING FLOW:
+ * 1. User clicks "Draw Boundary" button
+ * 2. Drawing mode enabled, user draws polygon
+ * 3. On completion, boundary coordinates saved
+ * 4. filterPropertiesInBoundary called with all properties
+ * 5. Filtered properties sent to parent via onBoundaryChange
+ * 6. Parent updates grid to show only filtered properties
+ * 7. Map markers remain visible (all properties shown)
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Array<Object>} [props.properties=[]] - Array of all properties
+ * @param {Object|null} props.selectedProperty - Currently selected property
+ * @param {Function} [props.onPropertyClick] - Callback when marker clicked
+ * @param {Function} [props.onBoundaryChange] - Callback when boundary changes (filtered props)
+ * @param {Function} [props.onBoundaryCreated] - Callback when boundary created
+ * @param {Function} [props.onBoundaryEdited] - Callback when boundary edited
+ * @param {Function} [props.onBoundaryDeleted] - Callback when boundary deleted
+ * @param {string} [props.className=''] - Additional CSS classes
+ * @returns {React.ReactElement} Interactive property map
+ * 
+ * @example
+ * <PropertyMap
+ *   properties={allProperties}
+ *   selectedProperty={selected}
+ *   onPropertyClick={handleClick}
+ *   onBoundaryChange={(filtered, hasBoundary) => {
+ *     setDisplayedProperties(filtered);
+ *   }}
+ * />
+ */
 // ===== MAIN COMPONENT =====
 const PropertyMap = ({ 
   properties = [], 
@@ -182,33 +360,98 @@ const PropertyMap = ({
   onBoundaryDeleted,
   className = '' 
 }) => {
+  /**
+   * Map instance reference for direct Mapbox GL access
+   * @type {React.MutableRefObject}
+   */
   const mapRef = useRef();
+  
+  /**
+   * MapboxDraw instance reference for boundary drawing
+   * @type {React.MutableRefObject}
+   */
   const drawRef = useRef();
+  
+  /**
+   * Map viewport state (center, zoom)
+   * @type {Array}
+   */
   const [viewState, setViewState] = useState({
     longitude: -71.0589,
     latitude: 42.3601,
     zoom: 12
   });
+  /**
+   * Internally selected property (from marker click)
+   * @type {Array}
+   */
   const [selectedProperty, setSelectedProperty] = useState(null);
+  
+  /**
+   * Drawing mode enabled state
+   * @type {Array}
+   */
   const [drawingEnabled, setDrawingEnabled] = useState(false);
+  
+  /**
+   * Current boundary polygon geometry
+   * @type {Array}
+   */
   const [currentBoundary, setCurrentBoundary] = useState(null);
+  
+  /**
+   * Properties filtered by boundary
+   * @type {Array}
+   */
   const [filteredProperties, setFilteredProperties] = useState([]);
+  
+  /**
+   * Whether boundary is currently active
+   * @type {Array}
+   */
   const [hasBoundary, setHasBoundary] = useState(false);
 
-  // Store callback in ref to avoid infinite loops
+  /**
+   * Store onBoundaryChange in ref to avoid dependency issues
+   * 
+   * CRITICAL: Prevents infinite loops in useEffect by avoiding
+   * onBoundaryChange as direct dependency.
+   * 
+   * @type {React.MutableRefObject<Function>}
+   */
   const onBoundaryChangeRef = useRef(onBoundaryChange);
   useEffect(() => {
     onBoundaryChangeRef.current = onBoundaryChange;
   }, [onBoundaryChange]);
 
-  // Get coordinates from property
+  /**
+   * Get coordinates from property data
+   * 
+   * Tries multiple possible property formats for lat/lng coordinates.
+   * 
+   * @function
+   * @param {Object} property - Property object
+   * @returns {Object|null} Coordinates or null
+   * @returns {number} returns.lat - Latitude
+   * @returns {number} returns.lng - Longitude
+   */
   const getCoords = (property) => {
     const lat = property.location?.address?.coordinate?.lat || property.lat;
     const lng = property.location?.address?.coordinate?.lon || property.lon;
     return (lat && lng) ? { lat, lng } : null;
   };
 
-  // Calculate map center from properties - only on initial load
+  /**
+   * Calculate map center from properties on initial load
+   * 
+   * Calculates average latitude/longitude of all properties with valid
+   * coordinates to center map on search results. Only runs on initial
+   * load, not when boundary changes.
+   * 
+   * Runs when: properties array changes (new search)
+   * 
+   * @listens properties
+   */
   useEffect(() => {
     if (properties && properties.length > 0 && !hasBoundary) {
       const validProperties = properties.filter(p => getCoords(p));
@@ -227,6 +470,19 @@ const PropertyMap = ({
   }, [properties]); // Only depend on properties, not hasBoundary
 
   // Filter properties when boundary changes
+  /**
+   * Filter properties when boundary changes
+   * 
+   * When boundary is drawn/edited, filters properties to those within polygon.
+   * Notifies parent component via onBoundaryChange callback to update grid display.
+   * 
+   * IMPORTANT: Uses onBoundaryChangeRef to avoid infinite loops.
+   * 
+   * Runs when: currentBoundary or properties changes
+   * 
+   * @listens currentBoundary
+   * @listens properties
+   */
   useEffect(() => {
     if (currentBoundary) {
       const filtered = filterPropertiesInBoundary(properties, currentBoundary);
@@ -249,6 +505,17 @@ const PropertyMap = ({
   }, [currentBoundary, properties]); // Remove onBoundaryChange from deps
 
   // Handle property marker click
+  /**
+   * Handle property marker click
+   * 
+   * Selects property and opens popup. Prevents click when drawing mode is active.
+   * Stops event propagation to prevent map click handler from firing.
+   * 
+   * @function
+   * @callback
+   * @param {Object} property - Property that was clicked
+   * @param {Object} e - Click event
+   */
   const handleMarkerClick = useCallback((property, e) => {
     if (drawingEnabled) return;
     e?.originalEvent?.stopPropagation();
@@ -256,6 +523,25 @@ const PropertyMap = ({
   }, [drawingEnabled]);
 
   // Initialize Mapbox Draw
+  /**
+   * Initialize Mapbox Draw controls
+   * 
+   * Sets up MapboxDraw for polygon drawing. Handles draw.create, draw.update,
+   * and draw.delete events. Converts polygon coordinates to boundary format
+   * and notifies parent callbacks.
+   * 
+   * COORDINATE CONVERSION:
+   * - Mapbox Draw uses [lng, lat] format
+   * - Boundary helpers use [lat, lng] format
+   * - Conversion: coords[0].map(coord => [coord[1], coord[0]])
+   * 
+   * Runs when: drawingEnabled, onBoundaryCreated, onBoundaryEdited, or onBoundaryDeleted changes
+   * 
+   * @listens drawingEnabled
+   * @listens onBoundaryCreated
+   * @listens onBoundaryEdited
+   * @listens onBoundaryDeleted
+   */
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -273,6 +559,10 @@ const PropertyMap = ({
     map.addControl(draw, 'top-right');
     drawRef.current = draw;
 
+    /**
+     * Handle draw.create event (boundary created)
+     * @param {Object} e - Draw event
+     */
     const handleCreate = (e) => {
       const feature = e.features[0];
       const coords = feature.geometry.coordinates;
@@ -286,6 +576,10 @@ const PropertyMap = ({
       }
     };
 
+      /**
+     * Handle draw.update event (boundary edited)
+     * @param {Object} e - Draw event
+     */
     const handleUpdate = (e) => {
       const feature = e.features[0];
       const coords = feature.geometry.coordinates;
@@ -298,6 +592,9 @@ const PropertyMap = ({
       }
     };
 
+    /**
+     * Handle draw.delete event (boundary deleted)
+     */
     const handleDelete = () => {
       setCurrentBoundary(null);
       if (onBoundaryDeleted) onBoundaryDeleted();
@@ -317,6 +614,13 @@ const PropertyMap = ({
     };
   }, [drawingEnabled, onBoundaryCreated, onBoundaryEdited, onBoundaryDeleted]);
 
+    /**
+   * Toggle drawing mode on/off
+   * 
+   * Enables/disables polygon drawing mode and updates MapboxDraw mode.
+   * 
+   * @function
+   */
   const toggleDrawing = () => {
     const newState = !drawingEnabled;
     setDrawingEnabled(newState);
@@ -330,6 +634,14 @@ const PropertyMap = ({
     }
   };
 
+   /**
+   * Clear all boundaries
+   * 
+   * Deletes all drawn polygons, exits drawing mode, and notifies parent.
+   * Resets filtering to show all properties.
+   * 
+   * @function
+   */
   const clearBoundaries = () => {
     if (drawRef.current) {
       drawRef.current.deleteAll();
@@ -340,6 +652,13 @@ const PropertyMap = ({
   };
 
   // Format price
+  /**
+   * Format price for display
+   * 
+   * @function
+   * @param {number} price - Price value
+   * @returns {string} Formatted price (e.g., "$1.2M", "$250K")
+   */
   const formatPrice = (price) => {
     if (!price) return 'N/A';
     if (price >= 1000000) return `$${(price / 1000000).toFixed(1)}M`;
@@ -348,6 +667,28 @@ const PropertyMap = ({
   };
 
   // Estimate rent with variable multiplier based on price range
+  /**
+   * Estimate monthly rent using formula-based calculation
+   * 
+   * Simple rent estimation without API calls. Uses price-to-rent ratios
+   * that vary by price range, with adjustments for bedrooms and size.
+   * 
+   * FORMULA:
+   * 1. Base multiplier by price range (0.4%-0.9%)
+   * 2. Bedroom adjustment (+15% for 4+ beds, -15% for studios)
+   * 3. Size adjustment (+5% for 2000+ sqft, -8% for <1000 sqft)
+   * 4. Round to nearest $50
+   * 
+   * @function
+   * @param {Object} property - Property object
+   * @returns {number} Estimated monthly rent
+   * 
+   * @example
+   * // $250k property, 3 bed, 1500 sqft
+   * // Base: 250000 * 0.008 = 2000
+   * // Beds: 2000 * 1.08 = 2160
+   * // Result: 2150 (rounded to $50)
+   */
   const estimateRent = (property) => {
     const price = property.list_price || property.price || 0;
     const beds = property.description?.beds || property.beds || 0;
@@ -379,8 +720,23 @@ const PropertyMap = ({
   };
 
   // Properties to display on map - filtered when boundary exists
+  /**
+   * Properties to display on map
+   * When boundary active: shows filtered properties
+   * When no boundary: shows all properties
+   * @type {Array<Object>}
+   */ 
   const displayProperties = hasBoundary ? filteredProperties : properties;
+ /**
+   * Total property count (all results)
+   * @type {number}
+   */
   const totalCount = properties.length;
+  
+  /**
+   * Filtered property count (within boundary)
+   * @type {number}
+   */
   const filteredCount = filteredProperties.length;
 
   return (

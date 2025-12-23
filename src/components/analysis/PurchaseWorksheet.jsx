@@ -1,3 +1,38 @@
+/**
+ * @file Purchase worksheet with comprehensive investment inputs
+ * @module components/analysis/PurchaseWorksheet
+ * @description Comprehensive input form for all investment calculation assumptions.
+ * Provides interfaces for purchase price, financing, closing costs, rehab costs,
+ * rental income, operating expenses, and projection settings. Supports both
+ * percentage-based and itemized cost entry with toggle controls.
+ * 
+ * Key Features:
+ * - Purchase price and After Repair Value (ARV) inputs
+ * - Financing details (down payment, interest rate, loan term)
+ * - Itemized vs percentage-based closing costs
+ * - Itemized vs total rehab costs
+ * - Rental income and vacancy rate
+ * - Operating expenses (taxes, insurance, management, maintenance, CapEx, HOA)
+ * - Projection settings (appreciation, income/expense growth, selling costs)
+ * - Reset to defaults functionality
+ * - Local state management for smooth number entry
+ * 
+ * INPUT COMPONENTS:
+ * Three specialized input components with local state for smooth UX:
+ * - CurrencyInput: Dollar amounts with $ prefix
+ * - PercentInput: Percentages with % suffix
+ * - NumberInput: Plain numbers with optional suffix
+ * 
+ * All inputs use local state during editing, only sync to parent onBlur.
+ * This prevents cursor jumping and allows complete number entry.
+ * 
+ * @requires react
+ * @requires lucide-react
+ * @requires ../../utils/investmentCalculations
+ * 
+ * @version 1.0.0
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Trash2, Edit2, GripVertical, RotateCcw, Save, Info } from 'lucide-react';
 import { DEFAULTS } from '../../utils/investmentCalculations';
@@ -6,17 +41,63 @@ import { DEFAULTS } from '../../utils/investmentCalculations';
 // INPUT COMPONENTS - Use local state to allow full number entry
 // =============================================================================
 
+/**
+ * Currency Input Component
+ * 
+ * Input field for dollar amounts with $ prefix and local state management.
+ * Uses local state during editing to prevent cursor jumping, syncs to parent
+ * state onBlur.
+ * 
+ * BEHAVIOR:
+ * - Shows $ prefix always
+ * - Allows digits and one decimal point
+ * - Blocks all other characters
+ * - Syncs value to parent only onBlur
+ * - External updates only applied when not focused
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} props.value - Controlled value from parent
+ * @param {Function} props.onChange - Callback to update parent (onBlur only)
+ * @param {string} [props.placeholder='0'] - Placeholder text
+ * @returns {React.ReactElement} Currency input field
+ * 
+ * @example
+ * <CurrencyInput
+ *   value={inputs.offerPrice}
+ *   onChange={(val) => onInputChange('offerPrice', val)}
+ *   placeholder="250000"
+ * />
+ */
 function CurrencyInput({ value, onChange, placeholder = '0' }) {
+    /**
+   * Local state for input value during editing
+   * Prevents cursor jumping by not syncing on every keystroke
+   * @type {Array}
+   */
   const [localValue, setLocalValue] = useState(value?.toString() || '');
+    /**
+   * Ref to input element for focus detection
+   * @type {React.MutableRefObject}
+   */
   const inputRef = useRef(null);
   
   // Sync when external value changes (but not during typing)
+  /**
+   * Sync external value to local state when not focused
+   * Prevents overwriting user's typing with external updates
+   */
   useEffect(() => {
     if (document.activeElement !== inputRef.current) {
       setLocalValue(value ? value.toString() : '');
     }
   }, [value]);
   
+    /**
+   * Handle input change (during typing)
+   * Validates input to allow only numbers and decimal point
+   * @param {React.ChangeEvent} e - Change event
+   */
   const handleChange = (e) => {
     const raw = e.target.value;
     // Allow empty, digits, and one decimal point
@@ -25,6 +106,10 @@ function CurrencyInput({ value, onChange, placeholder = '0' }) {
     }
   };
   
+    /**
+   * Handle blur (when user leaves input)
+   * Converts string to number and syncs to parent
+   */
   const handleBlur = () => {
     const numValue = parseFloat(localValue) || 0;
     onChange(numValue);
@@ -48,10 +133,37 @@ function CurrencyInput({ value, onChange, placeholder = '0' }) {
   );
 }
 
+/**
+ * Percent Input Component
+ * 
+ * Input field for percentages with % suffix and local state management.
+ * Same behavior as CurrencyInput but with % suffix instead of $ prefix.
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} props.value - Controlled value from parent
+ * @param {Function} props.onChange - Callback to update parent (onBlur only)
+ * @param {string} [props.placeholder='0'] - Placeholder text
+ * @returns {React.ReactElement} Percent input field
+ * 
+ * @example
+ * <PercentInput
+ *   value={inputs.vacancyRate}
+ *   onChange={(val) => onInputChange('vacancyRate', val)}
+ * />
+ */
 function PercentInput({ value, onChange, placeholder = '0' }) {
+/**
+   * Local state for input value during editing
+   * @type {Array}
+   */
   const [localValue, setLocalValue] = useState(value?.toString() || '');
-  const inputRef = useRef(null);
   
+  /**
+   * Ref to input element for focus detection
+   * @type {React.MutableRefObject}
+   */
+  const inputRef = useRef(null);
   useEffect(() => {
     if (document.activeElement !== inputRef.current) {
       setLocalValue(value ? value.toString() : '');
@@ -88,8 +200,38 @@ function PercentInput({ value, onChange, placeholder = '0' }) {
   );
 }
 
+/**
+ * Number Input Component
+ * 
+ * Input field for plain numbers with optional suffix (e.g., "Years").
+ * Uses local state management like Currency and Percent inputs.
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} props.value - Controlled value from parent
+ * @param {Function} props.onChange - Callback to update parent (onBlur only)
+ * @param {string} [props.suffix=''] - Suffix text (e.g., "Years", "Months")
+ * @param {string} [props.placeholder='0'] - Placeholder text
+ * @returns {React.ReactElement} Number input field
+ * 
+ * @example
+ * <NumberInput
+ *   value={inputs.firstMtgAmortization}
+ *   onChange={(val) => onInputChange('firstMtgAmortization', val)}
+ *   suffix="Years"
+ * />
+ */
 function NumberInput({ value, onChange, suffix = '', placeholder = '0' }) {
+    /**
+   * Local state for input value during editing
+   * @type {Array}
+   */
   const [localValue, setLocalValue] = useState(value?.toString() || '');
+  
+  /**
+   * Ref to input element for focus detection
+   * @type {React.MutableRefObject}
+   */
   const inputRef = useRef(null);
   
   useEffect(() => {
@@ -132,14 +274,86 @@ function NumberInput({ value, onChange, suffix = '', placeholder = '0' }) {
 // MAIN COMPONENT
 // =============================================================================
 
+/**
+ * Purchase Worksheet Main Component
+ * 
+ * Comprehensive input form for all investment calculation assumptions. Organizes
+ * inputs into logical sections: Purchase, Financing, Costs, Income, Expenses, Projections.
+ * 
+ * STATE MANAGEMENT:
+ * - useFinancing: Toggle financing vs all-cash
+ * - loanType: Amortizing vs interest-only
+ * - itemizePurchaseCosts: Toggle percentage vs itemized closing costs
+ * - itemizeRehabCosts: Toggle total vs itemized rehab
+ * - purchaseCostItems: Array of itemized closing cost line items
+ * - rehabCostItems: Array of itemized rehab line items
+ * - isInitialized: Flag to prevent re-initialization
+ * 
+ * INITIALIZATION:
+ * - Runs once on mount to set default values
+ * - Pulls from property data, investor profile, and DEFAULTS
+ * - Critical: Sets purchase costs to 3% default
+ * - Loads saved itemizations if available
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.property - Property data
+ * @param {Object} props.inputs - Current input values from parent
+ * @param {Function} props.onInputChange - Callback to update parent inputs
+ * @param {Function} [props.onSave] - Callback to save worksheet
+ * @returns {React.ReactElement} Purchase worksheet form
+ * 
+ * @example
+ * <PurchaseWorksheet
+ *   property={propertyData}
+ *   inputs={calculationInputs}
+ *   onInputChange={(field, value) => setInputs({...inputs, [field]: value})}
+ *   onSave={handleSaveAnalysis}
+ * />
+ */
 export default function PurchaseWorksheet({ property, inputs, onInputChange, onSave }) {
+ /**
+   * Whether financing is enabled (vs all-cash)
+   * @type {Array}
+   */
   const [useFinancing, setUseFinancing] = useState(true);
+  
+  /**
+   * Loan type selection (amortizing vs interest-only)
+   * @type {Array}
+   */
   const [loanType, setLoanType] = useState('amortizing');
+  
+  /**
+   * Whether to itemize purchase/closing costs
+   * @type {Array}
+   */
   const [itemizePurchaseCosts, setItemizePurchaseCosts] = useState(false);
+  
+  /**
+   * Whether to itemize rehab/repair costs
+   * @type {Array}
+   */
   const [itemizeRehabCosts, setItemizeRehabCosts] = useState(false);
+  
+  /**
+   * Whether PMI (Private Mortgage Insurance) is enabled
+   * @type {Array}
+   */
   const [enablePMI, setEnablePMI] = useState(false);
+  
+  /**
+   * Initialization flag to prevent re-initialization
+   * @type {Array}
+   */
   const [isInitialized, setIsInitialized] = useState(false);
   
+  /**
+   * Itemized purchase/closing cost line items
+   * @type {Array}
+   * @property {string} [].name - Cost item name
+   * @property {number} [].value - Cost item value
+   */
   const [purchaseCostItems, setPurchaseCostItems] = useState([
     { name: 'Home Inspection', value: 0 },
     { name: 'Appraisal', value: 0 },
@@ -150,6 +364,12 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     { name: 'Attorney Fees', value: 0 }
   ]);
 
+    /**
+   * Itemized rehab cost line items
+   * @type {Array}
+   * @property {string} [].name - Rehab item name
+   * @property {number} [].value - Rehab item value
+   */
   const [rehabCostItems, setRehabCostItems] = useState([
     { name: 'Roof', value: 0 },
     { name: 'Exterior', value: 0 },
@@ -163,12 +383,32 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     { name: 'Plumbing', value: 0 }
   ]);
 
-  // Get price from multiple sources
+/**
+   * Get purchase price from multiple sources
+   * 
+   * Tries inputs, then property data, with fallback to 0.
+   * 
+   * @function
+   * @callback
+   * @returns {number} Purchase price
+   */
   const getPurchasePrice = useCallback(() => {
     return inputs?.offerPrice || property?.price || property?.propertyData?.price || 0;
   }, [inputs?.offerPrice, property?.price, property?.propertyData?.price]);
 
-  // Get rent estimate
+  /**
+   * Get monthly rent estimate
+   * 
+   * Priority order:
+   * 1. RentCast data
+   * 2. Property rent estimate
+   * 3. Calculated from grossRents input
+   * 4. Formula-based estimation (0.7% of price)
+   * 
+   * @function
+   * @callback
+   * @returns {number} Monthly rent estimate
+   */
   const getRentValue = useCallback(() => {
     if (property?.rentCastData?.rentEstimate) return property.rentCastData.rentEstimate;
     if (property?.rentEstimate) return property.rentEstimate;
@@ -177,7 +417,26 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     return price > 0 ? Math.round((price * 0.007) / 50) * 50 : 0;
   }, [property, inputs?.grossRents, getPurchasePrice]);
 
-  // Initialize defaults ONCE on mount
+  /**
+   * Initialize defaults ONCE on mount
+   * 
+   * CRITICAL INITIALIZATION:
+   * Sets all default values for inputs if not already set. Pulls from:
+   * 1. Existing inputs (if already set)
+   * 2. Property data (price, rent)
+   * 3. DEFAULTS constant (financing, expenses, projections)
+   * 
+   * IMPORTANT: Sets purchaseCostsPercent to 3% and calculates total.
+   * This ensures calculations have closing costs even if user doesn't edit.
+   * 
+   * Loads saved itemizations if available in inputs.
+   * 
+   * Runs only once when isInitialized is false.
+   * 
+   * @listens inputs
+   * @listens property
+   * @listens isInitialized
+   */
   useEffect(() => {
     if (isInitialized) return;
     
@@ -247,7 +506,12 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     setIsInitialized(true);
   }, [inputs, property, onInputChange, getPurchasePrice, getRentValue, isInitialized]);
 
-  // Format currency
+   /**
+   * Format number as USD currency
+   * @function
+   * @param {number} value - Dollar amount
+   * @returns {string} Formatted currency (e.g., "$250,000")
+   */
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -257,20 +521,58 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     }).format(value || 0);
   };
 
-  // Handle purchase price change - recalculate closing costs
+/**
+ * Purchase Worksheet - Handler Functions and Helper Components
+ */
+
+/**
+ * Handle purchase price change
+ * 
+ * Updates offer price and automatically recalculates closing costs
+ * based on current percentage setting.
+ * 
+ * @function
+ * @param {number} value - New purchase price
+ * 
+ * @example
+ * handlePurchasePriceChange(275000);
+ * // -> Sets offerPrice to 275000
+ * // -> Recalculates purchaseCostsTotal: 275000 * 3% = 8,250
+ */
   const handlePurchasePriceChange = (value) => {
     onInputChange('offerPrice', value);
     const percent = inputs?.purchaseCostsPercent ?? DEFAULTS.purchaseCostsPercent;
     onInputChange('purchaseCostsTotal', value * (percent / 100));
   };
 
-  // Handle purchase cost percentage change
+  /**
+ * Handle purchase cost percentage change
+ * 
+ * Updates closing cost percentage and recalculates total based on
+ * current purchase price.
+ * 
+ * @function
+ * @param {number} percent - New percentage (e.g., 3.5 for 3.5%)
+ * 
+ * @example
+ * handlePurchaseCostPercentChange(4.0);
+ * // -> Sets purchaseCostsPercent to 4.0%
+ * // -> Recalculates total: price * 4% = new total
+ */
   const handlePurchaseCostPercentChange = (percent) => {
     onInputChange('purchaseCostsPercent', percent);
     onInputChange('purchaseCostsTotal', getPurchasePrice() * (percent / 100));
   };
 
-  // Itemized cost handlers
+/**
+ * Handle itemized purchase cost value change
+ * 
+ * Updates specific line item and recalculates total from all items.
+ * 
+ * @function
+ * @param {number} index - Item index in array
+ * @param {number} value - New item value
+ */
   const handlePurchaseCostChange = (index, value) => {
     const newItems = [...purchaseCostItems];
     newItems[index].value = value;
@@ -279,12 +581,23 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     onInputChange('purchaseCostsTotal', newItems.reduce((sum, item) => sum + (item.value || 0), 0));
   };
 
+  /**
+ * Add new itemized purchase cost
+ * 
+ * @function
+ */
   const handleAddPurchaseCost = () => {
     const newItems = [...purchaseCostItems, { name: 'New Cost', value: 0 }];
     setPurchaseCostItems(newItems);
     onInputChange('itemizedPurchaseCosts', newItems);
   };
 
+  /**
+ * Delete itemized purchase cost
+ * 
+ * @function
+ * @param {number} index - Item index to delete
+ */
   const handleDeletePurchaseCost = (index) => {
     const newItems = purchaseCostItems.filter((_, i) => i !== index);
     setPurchaseCostItems(newItems);
@@ -292,6 +605,13 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     onInputChange('purchaseCostsTotal', newItems.reduce((sum, item) => sum + (item.value || 0), 0));
   };
 
+  /**
+ * Handle itemized rehab cost value change
+ * 
+ * @function
+ * @param {number} index - Item index
+ * @param {number} value - New value
+ */
   const handleRehabCostChange = (index, value) => {
     const newItems = [...rehabCostItems];
     newItems[index].value = value;
@@ -300,12 +620,23 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     onInputChange('repairs', newItems.reduce((sum, item) => sum + (item.value || 0), 0));
   };
 
+  /**
+ * Add new itemized rehab cost
+ * 
+ * @function
+ */
   const handleAddRehabCost = () => {
     const newItems = [...rehabCostItems, { name: 'New Item', value: 0 }];
     setRehabCostItems(newItems);
     onInputChange('itemizedRehabCosts', newItems);
   };
 
+  /**
+ * Delete itemized rehab cost
+ * 
+ * @function
+ * @param {number} index - Item index to delete
+ */
   const handleDeleteRehabCost = (index) => {
     const newItems = rehabCostItems.filter((_, i) => i !== index);
     setRehabCostItems(newItems);
@@ -313,7 +644,15 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     onInputChange('repairs', newItems.reduce((sum, item) => sum + (item.value || 0), 0));
   };
 
-  // Toggle handlers
+  /**
+ * Toggle itemized purchase costs on/off
+ * 
+ * Switches between percentage-based and itemized closing costs.
+ * When enabling: saves current items array
+ * When disabling: clears items and reverts to percentage-based
+ * 
+ * @function
+ */
   const handleTogglePurchaseCosts = () => {
     setItemizePurchaseCosts(!itemizePurchaseCosts);
     if (!itemizePurchaseCosts) {
@@ -325,6 +664,13 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     }
   };
 
+  /**
+ * Toggle itemized rehab costs on/off
+ * 
+ * Switches between total amount and itemized rehab costs.
+ * 
+ * @function
+ */
   const handleToggleRehabCosts = () => {
     setItemizeRehabCosts(!itemizeRehabCosts);
     if (!itemizeRehabCosts) {
@@ -334,7 +680,14 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     }
   };
 
-  // Reset to defaults
+  /**
+ * Reset all values to defaults
+ * 
+ * Prompts for confirmation, then resets all inputs to default values.
+ * Clears all itemizations and returns to percentage-based costs.
+ * 
+ * @function
+ */
   const handleReset = () => {
     if (!window.confirm('Reset all values to defaults?')) return;
     
@@ -390,7 +743,14 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     ]);
   };
 
-  // Calculate totals
+  /**
+ * Calculate totals based on current mode
+ * 
+ * Purchase costs: Sum of items if itemized, otherwise percentage of price
+ * Rehab costs: Sum of items if itemized, otherwise total input
+ * 
+ * @type {number}
+ */
   const purchaseCostsTotal = itemizePurchaseCosts 
     ? purchaseCostItems.reduce((sum, item) => sum + (item.value || 0), 0)
     : (inputs?.purchaseCostsTotal || getPurchasePrice() * (DEFAULTS.purchaseCostsPercent / 100));
@@ -399,11 +759,35 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     ? rehabCostItems.reduce((sum, item) => sum + (item.value || 0), 0)
     : (inputs?.repairs || 0);
 
+    /**
+ * Down payment percentage (100 - LTV)
+ * @type {number}
+ */
   const downPaymentPercent = 100 - (inputs?.firstMtgLTV || DEFAULTS.ltv);
+  /**
+ * Down payment dollar amount
+ * @type {number}
+ */
   const downPaymentAmount = (inputs?.offerPrice || 0) * (downPaymentPercent / 100);
+  /**
+ * Loan amount (price × LTV)
+ * @type {number}
+ */
   const loanAmount = (inputs?.offerPrice || 0) * ((inputs?.firstMtgLTV || DEFAULTS.ltv) / 100);
 
-  // Toggle component
+  /**
+ * Toggle Switch Component
+ * 
+ * Reusable toggle switch for boolean settings.
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {boolean} props.enabled - Current toggle state
+ * @param {Function} props.onChange - Callback when toggled
+ * @param {string} props.label - Toggle label text
+ * @param {string} [props.desc] - Optional description text
+ * @returns {React.ReactElement} Toggle switch
+ */
   const Toggle = ({ enabled, onChange, label, desc }) => (
     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
       <div>
@@ -423,7 +807,22 @@ export default function PurchaseWorksheet({ property, inputs, onInputChange, onS
     </div>
   );
 
-  // Itemized row component
+  /**
+ * Itemized Row Component
+ * 
+ * Single row in itemized costs list with editable value and delete button.
+ * Uses local state for smooth editing experience.
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.item - Cost item
+ * @param {string} props.item.name - Item name
+ * @param {number} props.item.value - Item value
+ * @param {number} props.index - Item index in array
+ * @param {Function} props.onValueChange - Callback when value changes
+ * @param {Function} props.onDelete - Callback to delete item
+ * @returns {React.ReactElement} Itemized cost row
+ */
   const ItemRow = ({ item, index, onValueChange, onDelete }) => {
     const [localVal, setLocalVal] = useState(item.value?.toString() || '');
     

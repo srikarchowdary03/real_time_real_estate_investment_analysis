@@ -1,13 +1,67 @@
+/**
+ * @file Realty-in-US API integration for property search and listings
+ * @module services/realtyAPI
+ * @description Provides comprehensive property search functionality through the Realty-in-US API
+ * hosted on RapidAPI. Handles property searches, auto-complete, property details, photos,
+ * similar properties, and market statistics. Includes rate limiting and image quality upgrades.
+ * 
+ * @requires axios
+ * @see {@link https://rapidapi.com/datascraper/api/realty-in-us RapidAPI - Realty-in-US}
+ * 
+ * @version 1.0.0
+ */
 import axios from 'axios';
 
+/**
+ * RapidAPI key from environment variables
+ * @constant {string}
+ * @private
+ */
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
+/**
+ * RapidAPI host for Realty-in-US
+ * @constant {string}
+ * @private
+ */
 const RAPIDAPI_HOST = 'realty-in-us.p.rapidapi.com';
+/**
+ * Base URL for all API requests
+ * @constant {string}
+ * @private
+ */
 const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
+/**
+ * Minimum time between API requests in milliseconds
+ * @constant {number}
+ * @private
+ */
 // Rate limiting
 const MIN_REQUEST_INTERVAL = 250;
+
+/**
+ * Timestamp of last API request for rate limiting
+ * @type {number}
+ * @private
+ */
 let lastRequestTime = 0;
 
+/**
+ * Wait for rate limit interval before making next request
+ * 
+ * Implements simple rate limiting to prevent API throttling. Ensures minimum
+ * 250ms between consecutive requests by calculating time since last request
+ * and waiting if necessary.
+ * 
+ * @async
+ * @function
+ * @private
+ * @returns {Promise<void>}
+ * 
+ * @example
+ * await waitForRateLimit();
+ * // Now safe to make API request
+ */
 const waitForRateLimit = async () => {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
@@ -19,8 +73,19 @@ const waitForRateLimit = async () => {
   
   lastRequestTime = Date.now();
 };
-
-// Base configuration for all API requests
+/**
+ * Get base configuration for API requests
+ * 
+ * Returns axios configuration object with required RapidAPI headers.
+ * 
+ * @function
+ * @private
+ * @returns {Object} Axios configuration object
+ * @returns {Object} returns.headers - HTTP headers
+ * @returns {string} returns.headers.X-RapidAPI-Key - API key
+ * @returns {string} returns.headers.X-RapidAPI-Host - API host
+ * @returns {string} returns.headers.Content-Type - Content type
+ */
 const getConfig = () => ({
   headers: {
     'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -31,8 +96,19 @@ const getConfig = () => ({
 
 /**
  * Upgrade image URL to higher quality
- * Realty API uses rdcpix.com with URL parameters for sizing:
- * Pattern: -m{mode}xd-w{width}_h{height}_q{quality}
+ * 
+ * Transforms rdcpix.com image URLs to higher quality versions by modifying
+ * URL parameters. Realty API uses rdcpix.com with URL pattern:
+ * -m{mode}xd-w{width}_h{height}_q{quality}
+ * 
+ * @function
+ * @param {string} url - Original image URL from API
+ * @param {string} [size='large'] - Desired size preset
+ * @returns {string|null} Upgraded image URL or null if invalid
+ * 
+ * @example
+ * const thumbnail = upgradeImageUrl(url, 'medium'); // 640x480
+ * const fullSize = upgradeImageUrl(url, 'xlarge');  // 1280x960
  */
 const upgradeImageUrl = (url, size = 'large') => {
   if (!url) return null;
@@ -72,6 +148,28 @@ const upgradeImageUrl = (url, size = 'large') => {
 
 /**
  * Auto-complete location suggestions
+ * 
+ * Provides location auto-complete suggestions as user types. Returns cities,
+ * ZIP codes, and other locations with normalized format for easy use in
+ * search forms.
+ * 
+ * @async
+ * @function
+ * @param {string} input - User's search input text
+ * @param {number} [limit=10] - Maximum number of suggestions to return
+ * @returns {Promise<Array<Object>>} Array of location suggestions
+ * @returns {string} returns[].display - Formatted display text
+ * @returns {string} returns[].value - Value for search (city,state or ZIP)
+ * @returns {string|null} returns[].city - City name
+ * @returns {string|null} returns[].state - State code
+ * @returns {string|null} returns[].postalCode - ZIP code
+ * @returns {string} returns[].type - Location type (city/postal_code)
+ * @returns {number|null} returns[].lat - Latitude
+ * @returns {number|null} returns[].lon - Longitude
+ * 
+ * @example
+ * const suggestions = await autoCompleteLocations('Miami', 5);
+ * // Returns: [{ display: 'Miami, FL', value: 'Miami, FL', city: 'Miami', ... }]
  */
 export const autoCompleteLocations = async (input, limit = 10) => {
   try {
@@ -122,7 +220,50 @@ export const autoCompleteLocations = async (input, limit = 10) => {
 
 /**
  * Search properties using POST v3/list endpoint
- * This is the CORRECT endpoint for Realty-in-US
+ * 
+ * Main property search function. Searches for properties by location (city/state
+ * or ZIP code) with optional filters for beds, baths, price, square footage,
+ * and property type. Returns up to 200 properties per request.
+ * 
+ * This is the CORRECT endpoint for Realty-in-US API.
+ * 
+ * @async
+ * @function
+ * @param {Object} [params={}] - Search parameters
+ * @param {string} params.location - Location (required) - city/state or ZIP code
+ * @param {number} [params.limit=200] - Max results (max: 200)
+ * @param {string} [params.status='for_sale'] - Property status
+ * @param {number} [params.beds_min] - Minimum bedrooms
+ * @param {number} [params.beds_max] - Maximum bedrooms
+ * @param {number} [params.baths_min] - Minimum bathrooms
+ * @param {number} [params.baths_max] - Maximum bathrooms
+ * @param {number} [params.price_min] - Minimum list price
+ * @param {number} [params.price_max] - Maximum list price
+ * @param {number} [params.sqft_min] - Minimum square footage
+ * @param {number} [params.sqft_max] - Maximum square footage
+ * @param {string} [params.property_type] - Property type filter
+ * @returns {Promise<Array<Object>>} Array of normalized property objects
+ * @throws {Error} If location is missing
+ * @throws {Error} If API returns 429 (rate limit)
+ * @throws {Error} If API returns 401 (invalid key)
+ * @throws {Error} If API returns 403 (access denied)
+ * 
+ * @example
+ * // Search by city and state
+ * const properties = await searchProperties({
+ *   location: 'Miami, FL',
+ *   limit: 50,
+ *   price_min: 200000,
+ *   price_max: 500000,
+ *   beds_min: 2
+ * });
+ * 
+ * @example
+ * // Search by ZIP code
+ * const properties = await searchProperties({
+ *   location: '33139',
+ *   property_type: 'condo'
+ * });
  */
 export const searchProperties = async (params = {}) => {
   try {
@@ -246,7 +387,36 @@ export const searchProperties = async (params = {}) => {
 
 /**
  * Normalize property data from Realty-in-US API
- * Includes image quality upgrade
+ * 
+ * Transforms raw API response into consistent format for use throughout app.
+ * Includes image quality upgrades, address normalization, and days on market
+ * calculation. All images are upgraded to higher quality versions.
+ * 
+ * @function
+ * @private
+ * @param {Object} property - Raw property object from API
+ * @returns {Object} Normalized property object
+ * @returns {string} returns.property_id - Unique property identifier
+ * @returns {string} returns.listing_id - Listing identifier
+ * @returns {string} returns.address - Street address
+ * @returns {string} returns.city - City name
+ * @returns {string} returns.state - State code
+ * @returns {string} returns.zip - ZIP code
+ * @returns {number|null} returns.lat - Latitude
+ * @returns {number|null} returns.lon - Longitude
+ * @returns {number|null} returns.price - List price
+ * @returns {number} returns.beds - Number of bedrooms
+ * @returns {number} returns.baths - Number of bathrooms
+ * @returns {number} returns.sqft - Square footage
+ * @returns {number|null} returns.lotSize - Lot size in square feet
+ * @returns {number|null} returns.yearBuilt - Year property was built
+ * @returns {string} returns.propertyType - Property type
+ * @returns {string} returns.status - Listing status
+ * @returns {string} returns.thumbnail - Thumbnail image URL (medium quality)
+ * @returns {string} returns.primaryPhoto - Primary photo URL (large quality)
+ * @returns {Array<Object>} returns.photos - All photos array
+ * @returns {number|null} returns.daysOnMarket - Days property has been listed
+ * @returns {boolean} returns.isNewListing - True if flagged as new listing
  */
 const normalizeProperty = (property) => {
   const location = property.location || {};
@@ -316,7 +486,23 @@ const normalizeProperty = (property) => {
 };
 
 /**
- * Search properties for sale (wrapper for backward compatibility)
+ * Search properties for sale (backward compatibility wrapper)
+ * 
+ * Legacy function that wraps searchProperties for existing code.
+ * Converts old-style parameters to new format.
+ * 
+ * @async
+ * @function
+ * @param {string} cityOrPostalCode - City name or ZIP code
+ * @param {string|null} [stateCode=null] - State code (if city provided)
+ * @param {Object} [options={}] - Additional search options
+ * @returns {Promise<Array<Object>>} Array of property objects
+ * 
+ * @example
+ * const properties = await searchPropertiesForSale('Miami', 'FL', {
+ *   limit: 50,
+ *   price_min: 200000
+ * });
  */
 export const searchPropertiesForSale = async (cityOrPostalCode, stateCode = null, options = {}) => {
   const location = stateCode 
@@ -331,6 +517,19 @@ export const searchPropertiesForSale = async (cityOrPostalCode, stateCode = null
 
 /**
  * Get property details by property ID
+ * 
+ * Fetches complete details for a specific property using its unique ID.
+ * Returns normalized property object with upgraded images.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Unique property identifier
+ * @returns {Promise<Object>} Normalized property details object
+ * @throws {Error} If API request fails
+ * 
+ * @example
+ * const property = await getPropertyDetails('M1234567890');
+ * console.log(property.address, property.price);
  */
 export const getPropertyDetails = async (propertyId) => {
   try {
@@ -356,7 +555,24 @@ export const getPropertyDetails = async (propertyId) => {
 };
 
 /**
- * Get property photos (high quality)
+ * Get property photos in high quality
+ * 
+ * Fetches all available photos for a property with upgraded quality.
+ * Returns array of photo objects with both full-size and thumbnail URLs.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Unique property identifier
+ * @returns {Promise<Array<Object>>} Array of photo objects
+ * @returns {string} returns[].href - Full-size photo URL (xlarge quality)
+ * @returns {string} returns[].thumbnail - Thumbnail URL (medium quality)
+ * @returns {Array<string>} returns[].tags - Photo tags (e.g., 'kitchen', 'bedroom')
+ * 
+ * @example
+ * const photos = await getPropertyPhotos('M1234567890');
+ * photos.forEach(photo => {
+ *   console.log(photo.href); // High-res image URL
+ * });
  */
 export const getPropertyPhotos = async (propertyId) => {
   try {
@@ -387,6 +603,19 @@ export const getPropertyPhotos = async (propertyId) => {
 
 /**
  * Get similar properties
+ * 
+ * Finds properties similar to the specified property based on location,
+ * price, size, and other characteristics. Useful for "You may also like"
+ * sections and comparison shopping.
+ * 
+ * @async
+ * @function
+ * @param {string} propertyId - Reference property ID
+ * @returns {Promise<Array<Object>>} Array of similar property objects
+ * 
+ * @example
+ * const similar = await getSimilarProperties('M1234567890');
+ * console.log(`Found ${similar.length} similar properties`);
  */
 export const getSimilarProperties = async (propertyId) => {
   try {
@@ -411,6 +640,20 @@ export const getSimilarProperties = async (propertyId) => {
 
 /**
  * Get market statistics for a location
+ * 
+ * Retrieves market-level statistics for a city including average prices,
+ * inventory levels, and market trends. Useful for market analysis and
+ * comparison.
+ * 
+ * @async
+ * @function
+ * @param {string} city - City name
+ * @param {string} stateCode - State code (e.g., 'FL', 'CA')
+ * @returns {Promise<Object|null>} Market statistics object or null if unavailable
+ * 
+ * @example
+ * const stats = await getMarketStatistics('Miami', 'FL');
+ * console.log('Median price:', stats.medianPrice);
  */
 export const getMarketStatistics = async (city, stateCode) => {
   try {
@@ -433,6 +676,19 @@ export const getMarketStatistics = async (city, stateCode) => {
   }
 };
 
+/**
+ * Default module export with all API functions
+ * 
+ * @type {Object}
+ * @property {Function} autoCompleteLocations - Location autocomplete
+ * @property {Function} searchProperties - Main property search
+ * @property {Function} searchPropertiesForSale - Legacy search wrapper
+ * @property {Function} getPropertyDetails - Get single property details
+ * @property {Function} getPropertyPhotos - Get property photos
+ * @property {Function} getSimilarProperties - Find similar properties
+ * @property {Function} getMarketStatistics - Get market statistics
+ * @property {Function} upgradeImageUrl - Upgrade image quality
+ */
 export default {
   autoCompleteLocations,
   searchProperties,
